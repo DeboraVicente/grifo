@@ -47,12 +47,23 @@ export function useDespesas(userId: string | undefined) {
     )
 
     const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-        criadoEm: (d.data().criadoEm as Timestamp)?.toDate().toISOString() ?? '',
-        atualizadoEm: (d.data().atualizadoEm as Timestamp)?.toDate().toISOString() ?? '',
-      })) as Despesa[]
+      const data = snap.docs.map((d) => {
+        const raw = d.data()
+        // Normaliza despesas antigas que usavam "valor" em vez de "valorTotal"
+        const valorTotal = raw.valorTotal ?? raw.valor ?? 0
+        const valorParcela = raw.valorParcela ?? valorTotal
+        const listaParcelas = raw.listaParcelas ?? []
+        return {
+          id: d.id,
+          ...raw,
+          valorTotal,
+          valorParcela,
+          listaParcelas,
+          adiantamentos: raw.adiantamentos ?? [],
+          criadoEm: (raw.criadoEm as Timestamp)?.toDate().toISOString() ?? '',
+          atualizadoEm: (raw.atualizadoEm as Timestamp)?.toDate().toISOString() ?? '',
+        }
+      }) as Despesa[]
       setDespesas(data)
       setLoading(false)
     })
@@ -78,6 +89,9 @@ export function useDespesas(userId: string | undefined) {
       listaParcelas,
       adiantamentos: [],
       pago: false,
+      rateioParticipantesIds: form.rateio.ativo
+        ? (form.rateio as any).participantes?.map((p: any) => p.userId) ?? []
+        : [],
       userId,
       criadoEm: serverTimestamp(),
       atualizadoEm: serverTimestamp(),

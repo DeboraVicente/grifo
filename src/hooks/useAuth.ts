@@ -7,7 +7,8 @@ import {
   onAuthStateChanged,
   updateProfile,
 } from 'firebase/auth'
-import { auth } from '../lib/firebase'
+import { doc, setDoc } from 'firebase/firestore'
+import { auth, db } from '../lib/firebase'
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
@@ -37,6 +38,12 @@ export function useAuth() {
     try {
       const { user } = await createUserWithEmailAndPassword(auth, email, password)
       await updateProfile(user, { displayName: nome })
+      // Salva perfil no Firestore para busca por e-mail nas amizades
+      await setDoc(doc(db, 'usuarios', user.uid), {
+        nome,
+        email: email.toLowerCase(),
+        criadoEm: new Date().toISOString(),
+      })
     } catch (e: any) {
       setError(mapFirebaseError(e.code))
       throw e

@@ -1,47 +1,47 @@
-  import { useState } from 'react'
-  import type { Caixinha, CaixinhaForm as CaixinhaFormType, CaixinhaCategoria } from '../../types'
+import { useState } from 'react'
+import type { Caixinha, CaixinhaForm as CaixinhaFormType, CaixinhaCategoria } from '../../types'
 
-  const CATEGORIAS: { value: CaixinhaCategoria; label: string; emoji: string }[] = [
-    { value: 'emergencia', label: 'Emergência', emoji: '🆘' },
-    { value: 'viagem', label: 'Viagem', emoji: '✈️' },
-    { value: 'educacao', label: 'Educação', emoji: '📚' },
-    { value: 'saude', label: 'Saúde', emoji: '❤️' },
-    { value: 'reforma', label: 'Reforma', emoji: '🔧' },
-    { value: 'eletronicos', label: 'Eletrônicos', emoji: '📱' },
-    { value: 'outros', label: 'Outros', emoji: '📦' },
-  ]
+const CATEGORIAS: { value: CaixinhaCategoria; label: string; emoji: string }[] = [
+  { value: 'emergencia', label: 'Emergência', emoji: '🆘' },
+  { value: 'viagem', label: 'Viagem', emoji: '✈️' },
+  { value: 'educacao', label: 'Educação', emoji: '📚' },
+  { value: 'saude', label: 'Saúde', emoji: '❤️' },
+  { value: 'reforma', label: 'Reforma', emoji: '🔧' },
+  { value: 'eletronicos', label: 'Eletrônicos', emoji: '📱' },
+  { value: 'outros', label: 'Outros', emoji: '📦' },
+]
 
-  interface Props {
-    inicial?: Caixinha
-    onSalvar: (form: CaixinhaFormType) => Promise<void>
-    onCancelar: () => void
+interface Props {
+  inicial?: Caixinha
+  onSalvar: (form: CaixinhaFormType) => Promise<void>
+  onCancelar: () => void
+}
+
+const FORM_VAZIO: CaixinhaFormType = { nome: '', categoria: 'outros', valorMeta: undefined }
+
+export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
+  const [form, setForm] = useState<CaixinhaFormType>(
+    inicial ? { nome: inicial.nome, categoria: inicial.categoria, valorMeta: inicial.valorMeta } : FORM_VAZIO
+  )
+  const [temMeta, setTemMeta] = useState(!!inicial?.valorMeta)
+  const [loading, setLoading] = useState(false)
+
+  const set = (key: keyof CaixinhaFormType, value: any) => setForm((f) => ({ ...f, [key]: value }))
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try { await onSalvar({ ...form, valorMeta: temMeta ? form.valorMeta : undefined }) }
+    finally { setLoading(false) }
   }
 
-  const FORM_VAZIO: CaixinhaFormType = { nome: '', categoria: 'outros', valorMeta: undefined }
-
-  export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
-    const [form, setForm] = useState<CaixinhaFormType>(
-      inicial ? { nome: inicial.nome, categoria: inicial.categoria, valorMeta: inicial.valorMeta } : FORM_VAZIO
-    )
-    const [temMeta, setTemMeta] = useState(!!inicial?.valorMeta)
-    const [loading, setLoading] = useState(false)
-
-    const set = (key: keyof CaixinhaFormType, value: any) => setForm((f) => ({ ...f, [key]: value }))
-
-    const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault()
-      setLoading(true)
-      try { await onSalvar({ ...form, valorMeta: temMeta ? form.valorMeta : undefined }) }
-      finally { setLoading(false) }
-    }
-
-    return (
-      <form onSubmit={handleSubmit} className="caixinha-form">
-        <div className="field">
-          <label>Nome da caixinha</label>
-          <input type="text" placeholder="Ex: Viagem para o nordeste" value={form.nome}
-            onChange={(e) => set('nome', e.target.value)} required />
-        </div>
+  return (
+    <form onSubmit={handleSubmit} className="caixinha-form">
+      <div className="field">
+        <label>Nome da caixinha</label>
+        <input type="text" placeholder="Ex: Viagem para o nordeste" value={form.nome}
+          onChange={(e) => set('nome', e.target.value)} required />
+      </div>
 
         <div className="field full">
           <label>Categoria</label>
@@ -57,25 +57,25 @@
             </select>
         </div>
 
-        <div className="field">
-          <label className="checkbox-label">
-            <input type="checkbox" checked={temMeta}
-              onChange={(e) => { setTemMeta(e.target.checked); if (!e.target.checked) set('valorMeta', undefined) }} />
-            <span>Definir valor meta</span>
-          </label>
-          {temMeta && (
-            <input type="number" min="0" step="0.01" placeholder="R$ 0,00"
-              value={form.valorMeta || ''} style={{ marginTop: '0.5rem' }}
-              onChange={(e) => set('valorMeta', parseFloat(e.target.value) || undefined)} />
-          )}
-        </div>
+      <div className="field">
+        <label className="checkbox-label">
+          <input type="checkbox" checked={temMeta}
+            onChange={(e) => { setTemMeta(e.target.checked); if (!e.target.checked) set('valorMeta', undefined) }} />
+          <span>Definir valor meta</span>
+        </label>
+        {temMeta && (
+          <input type="number" min="0" step="0.01" placeholder="R$ 0,00"
+            value={form.valorMeta || ''} style={{ marginTop: '0.5rem' }}
+            onChange={(e) => set('valorMeta', parseFloat(e.target.value) || undefined)} />
+        )}
+      </div>
 
-        <div className="form-actions">
-          <button type="button" className="btn-ghost" onClick={onCancelar}>Cancelar</button>
-          <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? 'Salvando...' : inicial ? 'Salvar' : 'Criar caixinha'}
-          </button>
-        </div>
+      <div className="form-actions">
+        <button type="button" className="btn-ghost" onClick={onCancelar}>Cancelar</button>
+        <button type="submit" className="btn-primary" disabled={loading}>
+          {loading ? 'Salvando...' : inicial ? 'Salvar' : 'Criar caixinha'}
+        </button>
+      </div>
 
         <style>{`
           .caixinha-form { display: flex; flex-direction: column; gap: 1.25rem; }

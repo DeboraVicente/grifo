@@ -5,7 +5,6 @@ const CATEGORIA_EMOJI: Record<string, string> = {
   casa: '🏠', pessoal: '👤', saude: '❤️', locomocao: '🚗',
   beleza: '✨', alimentacao: '🍽️', educacao: '📚', lazer: '🎮', outros: '📦',
 }
-
 const METODO_LABEL: Record<string, string> = {
   credito: 'Crédito', debito: 'Débito', pix: 'Pix', dinheiro: 'Dinheiro',
 }
@@ -18,7 +17,7 @@ interface Props {
   onAdiantar: () => void
 }
 
-const fmt = (v: number | undefined) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtData = (data: string) =>
   new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 
@@ -29,10 +28,17 @@ export default function DespesaCard({ despesa, onEditar, onRemover, onPagarParce
   const totalParcelas = despesa.parcelas
   const progresso = totalParcelas > 0 ? (parcelasPagas / totalParcelas) * 100 : 0
   const totalAdiantado = despesa.adiantamentos?.reduce((s, a) => s + a.valor, 0) ?? 0
+  const valorTotal = despesa.valorTotal ?? (despesa as any).valor ?? 0
+  const valorParcela = despesa.valorParcela ?? valorTotal
+
+  // Rateio: pega a parte do criador (índice 0 não existe, mas mostra proporção)
+  const temRateio = despesa.rateio?.ativo
+  const participantesRateio = temRateio ? (despesa.rateio as any).participantes ?? [] : []
+  const totalParticipantes = participantesRateio.length + 1
+  const minhaParteRateio = temRateio ? valorParcela / totalParticipantes : null
 
   return (
     <div className={`despesa-card ${despesa.pago ? 'paga' : ''}`}>
-      {/* Linha principal */}
       <div className="card-main" onClick={() => setExpandido((v) => !v)}>
         <div className="card-icon">{CATEGORIA_EMOJI[despesa.categoria] ?? '📦'}</div>
 
@@ -42,38 +48,42 @@ export default function DespesaCard({ despesa, onEditar, onRemover, onPagarParce
             <span>{fmtData(despesa.data)}</span>
             <span className="dot">·</span>
             <span>{METODO_LABEL[despesa.metodoPagamento]}</span>
-            {despesa.parcelas > 1 && (
-              <>
-                <span className="dot">·</span>
-                <span className="tag-parcela">{parcelasPagas}/{totalParcelas} pagas</span>
-              </>
+            {totalParcelas > 1 && (
+              <><span className="dot">·</span>
+              <span className="tag-parcela">{parcelasPagas}/{totalParcelas}</span></>
             )}
-            {despesa.rateio?.ativo && (
-              <>
-                <span className="dot">·</span>
-                <span className="tag-rateio">rateio</span>
-              </>
+            {temRateio && (
+              <><span className="dot">·</span>
+              <span className="tag-rateio">rateio</span></>
             )}
           </div>
         </div>
 
         <div className="card-valor">
-          <span className={despesa.pago ? 'riscado' : ''}>{fmt(despesa.valorTotal ?? (despesa as any).valor ?? 0)}</span>
-          {despesa.parcelas > 1 && !despesa.pago && (
-            <span className="valor-parcela">{fmt(despesa.valorParcela ?? 0)}/mês</span>
+          {minhaParteRateio ? (
+            <>
+              <span className="valor-minha-parte">{fmt(minhaParteRateio)}</span>
+              <span className="valor-total-rateio">de {fmt(totalParcelas > 1 ? valorParcela : valorTotal)}</span>
+            </>
+          ) : (
+            <>
+              <span className={despesa.pago ? 'riscado' : ''}>{fmt(valorTotal)}</span>
+              {totalParcelas > 1 && !despesa.pago && (
+                <span className="valor-parcela">{fmt(valorParcela)}/mês</span>
+              )}
+            </>
           )}
           {despesa.pago && <span className="badge-pago">✓ pago</span>}
         </div>
       </div>
 
-      {/* Barra de progresso */}
-      {!despesa.pago && totalParcelas > 0 && (
+      {/* Barra progresso */}
+      {!despesa.pago && totalParcelas > 1 && (
         <div className="progresso-bar">
           <div className="progresso-fill" style={{ width: `${progresso}%` }} />
         </div>
       )}
 
-      {/* Expandido */}
       {expandido && (
         <div className="card-detalhes">
           {despesa.observacoes && <p className="detalhe-obs">{despesa.observacoes}</p>}
@@ -85,7 +95,23 @@ export default function DespesaCard({ despesa, onEditar, onRemover, onPagarParce
             </div>
           )}
 
-          {/* Lista de parcelas */}
+          {/* Participantes do rateio */}
+          {temRateio && participantesRateio.length > 0 && (
+            <div className="rateio-status">
+              <span className="rateio-status-titulo">Rateio</span>
+              {participantesRateio.map((p: any) => (
+                <div key={p.userId} className="rateio-participante">
+                  <span>{p.nome}</span>
+                  <span className={`rateio-badge ${p.status}`}>
+                    {p.status === 'pendente' ? '⏳ pendente' : p.status === 'aceito' ? '✓ aceito' : '✕ recusado'}
+                  </span>
+                  <span className="valor-gold">{fmt(p.valorDevido)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Parcelas */}
           {despesa.listaParcelas?.length > 0 && (
             <div className="parcelas-lista">
               {despesa.listaParcelas.map((p) => {
@@ -103,10 +129,7 @@ export default function DespesaCard({ despesa, onEditar, onRemover, onPagarParce
                       )}
                     </div>
                     {!p.pago && (
-                      <button
-                        className="btn-pagar-parcela"
-                        onClick={() => onPagarParcela(p.numero)}
-                      >
+                      <button className="btn-pagar-parcela" onClick={() => onPagarParcela(p.numero)}>
                         Pagar
                       </button>
                     )}
@@ -116,7 +139,6 @@ export default function DespesaCard({ despesa, onEditar, onRemover, onPagarParce
             </div>
           )}
 
-          {/* Ações */}
           <div className="card-acoes">
             {!despesa.pago && (
               <button className="acao-btn acao-adiantar" onClick={onAdiantar}>⬆ Adiantamento</button>

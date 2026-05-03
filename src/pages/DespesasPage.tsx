@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useDespesas } from '../hooks/useDespesas'
+import { useAmizades } from '../hooks/useAmizades'
+import { useRateioRecebido } from '../hooks/useRateio'
 import { useAuthContext } from '../lib/AuthContext'
 import DespesaCard from '../components/despesas/DespesaCard'
 import DespesaForm from '../components/despesas/DespesaForm'
@@ -11,8 +13,9 @@ type ModalTipo = 'criar' | 'editar' | 'pagar' | 'adiantar' | null
 
 export default function DespesasPage() {
   const { user } = useAuthContext()
-  const { despesas, loading, criar, editar, remover, pagarParcela, adicionarAdiantamento } =
-    useDespesas(user?.uid)
+  const { despesas, loading, criar, editar, remover, pagarParcela, adicionarAdiantamento } = useDespesas(user?.uid)
+  const { amigos } = useAmizades(user?.uid, user?.email ?? '', user?.displayName ?? '')
+  const { despesasRateadas, responderRateio } = useRateioRecebido(user?.uid)
 
   const [modal, setModal] = useState<ModalTipo>(null)
   const [selecionada, setSelecionada] = useState<Despesa | null>(null)
@@ -41,12 +44,16 @@ export default function DespesasPage() {
     await adicionarAdiantamento(selecionada.id, dados)
     fecharModal()
   }
-
   const abrirPagarParcela = (d: Despesa, numeroParcela: number) => {
-    setSelecionada(d)
-    setParcelaSelecionada(numeroParcela)
-    setModal('pagar')
+    setSelecionada(d); setParcelaSelecionada(numeroParcela); setModal('pagar')
   }
+
+  // Rateios pendentes de aprovação do usuário
+  const rateiosPendentes = despesasRateadas.filter((d) => {
+    if (!d.rateio?.ativo) return false
+    const participante = (d.rateio as any).participantes?.find((p: any) => p.userId === user?.uid)
+    return participante?.status === 'pendente'
+  })
 
   const despesasFiltradas = despesas.filter((d) => {
     if (filtro === 'pendentes') return !d.pago
@@ -59,56 +66,66 @@ export default function DespesasPage() {
   const anoAtual = agora.getFullYear()
 
   const totalMesAtual = despesas.reduce((acc, d) => {
-    if (!d.listaParcelas || d.listaParcelas.length === 0) {
+    if (!d.listaParcelas || d.listaParcelas.length === 0)
       return acc + (!d.pago ? (d.valorTotal ?? 0) : 0)
-    }
-    const valorParcelasMes = d.listaParcelas
+    return acc + d.listaParcelas
       .filter(p => {
-        const dataVenc = new Date(p.dataVencimento + 'T12:00:00')
-        return !p.pago && 
-              dataVenc.getMonth() === mesAtual && 
-              dataVenc.getFullYear() === anoAtual
+        const dv = new Date(p.dataVencimento + 'T12:00:00')
+        return !p.pago && dv.getMonth() === mesAtual && dv.getFullYear() === anoAtual
       })
       .reduce((s, p) => s + p.valor, 0)
-
-    return acc + valorParcelasMes
   }, 0)
+
   const totalRestanteFuturo = despesas.reduce((acc, d) => {
-    if (d.pago) return acc // Se a despesa pai está paga, não deve nada
-  
-    if (!d.listaParcelas || d.listaParcelas.length === 0) {
-      return acc + (d.valorTotal ?? 0)
-    }
-  
-    // Soma o valor de todas as parcelas que ainda estão como falso em 'pago'
-    const saldoAberto = d.listaParcelas
-      .filter(p => !p.pago)
-      .reduce((s, p) => s + p.valor, 0)
-  
-    return acc + saldoAberto
+    if (d.pago) return acc
+    if (!d.listaParcelas || d.listaParcelas.length === 0) return acc + (d.valorTotal ?? 0)
+    return acc + d.listaParcelas.filter(p => !p.pago).reduce((s, p) => s + p.valor, 0)
   }, 0)
-  const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-  // Parcela selecionada para calcular valor restante
+  const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   const parcelaObj = selecionada?.listaParcelas?.find((p) => p.numero === parcelaSelecionada)
   const totalPagoParcela = parcelaObj?.pagamentos?.reduce((s, p) => s + p.valor, 0) ?? 0
   const valorRestanteParcela = (parcelaObj?.valor ?? 0) - totalPagoParcela
 
   return (
     <div className="despesas-page">
+      {/* Rateios pendentes de aprovação */}
+      {rateiosPendentes.length > 0 && (
+        <div className="rateios-pendentes">
+          <span className="rateios-titulo">⚡ Rateios aguardando sua aprovação</span>
+          {rateiosPendentes.map((d) => {
+            const participante = (d.rateio as any).participantes?.find((p: any) => p.userId === user?.uid)
+            return (
+              <div key={d.id} className="rateio-item">
+                <div className="rateio-item-info">
+                  <span className="rateio-item-nome">{d.nome}</span>
+                  <span className="rateio-item-valor">sua parte: {fmt(participante?.valorDevido ?? 0)}/mês</span>
+                  <span className="rateio-item-total">total da despesa: {fmt(d.valorTotal)}</span>
+                </div>
+                <div className="rateio-item-acoes">
+                  <button className="btn-aceitar-rateio"
+                    onClick={() => responderRateio(d.id, d, user!.uid, 'aceito')}>Aceitar</button>
+                  <button className="btn-recusar-rateio"
+                    onClick={() => responderRateio(d.id, d, user!.uid, 'recusado')}>Recusar</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       <div className="resumo-cards">
         <div className="resumo-card principal">
           <span className="resumo-label">Para pagar no mês</span>
           <span className="resumo-valor">{fmt(totalMesAtual)}</span>
           <div className="resumo-indicador">Vence em breve</div>
         </div>
-        
         <div className="resumo-card secundario">
           <span className="resumo-label">Saldo devedor total</span>
           <span className="resumo-valor">{fmt(totalRestanteFuturo)}</span>
           <div className="resumo-status">Compromissos futuros</div>
         </div>
-      </div>  
+      </div>
 
       <div className="page-header">
         <div className="filtros">
@@ -134,9 +151,7 @@ export default function DespesasPage() {
       ) : (
         <div className="despesas-list">
           {despesasFiltradas.map((d) => (
-            <DespesaCard
-              key={d.id}
-              despesa={d}
+            <DespesaCard key={d.id} despesa={d}
               onEditar={() => { setSelecionada(d); setModal('editar') }}
               onRemover={() => handleRemover(d)}
               onPagarParcela={(num) => abrirPagarParcela(d, num)}
@@ -148,32 +163,24 @@ export default function DespesasPage() {
 
       {modal === 'criar' && (
         <Modal titulo="Nova despesa" onFechar={fecharModal}>
-          <DespesaForm onSalvar={handleCriar} onCancelar={fecharModal} />
+          <DespesaForm amigos={amigos} onSalvar={handleCriar} onCancelar={fecharModal} />
         </Modal>
       )}
       {modal === 'editar' && selecionada && (
         <Modal titulo="Editar despesa" onFechar={fecharModal}>
-          <DespesaForm inicial={selecionada} onSalvar={handleEditar} onCancelar={fecharModal} />
+          <DespesaForm amigos={amigos} inicial={selecionada} onSalvar={handleEditar} onCancelar={fecharModal} />
         </Modal>
       )}
       {modal === 'pagar' && selecionada && parcelaObj && (
         <Modal titulo={`Parcela ${parcelaSelecionada}/${selecionada.parcelas}`} onFechar={fecharModal}>
-          <PagamentoForm
-            tipo="pagamento"
-            valorRestante={valorRestanteParcela}
-            onSalvar={handlePagarParcela}
-            onCancelar={fecharModal}
-          />
+          <PagamentoForm tipo="pagamento" valorRestante={valorRestanteParcela}
+            onSalvar={handlePagarParcela} onCancelar={fecharModal} />
         </Modal>
       )}
       {modal === 'adiantar' && selecionada && (
         <Modal titulo="Registrar adiantamento" onFechar={fecharModal}>
-          <PagamentoForm
-            tipo="adiantamento"
-            valorRestante={selecionada.valorTotal}
-            onSalvar={handleAdiantar}
-            onCancelar={fecharModal}
-          />
+          <PagamentoForm tipo="adiantamento" valorRestante={selecionada.valorTotal}
+            onSalvar={handleAdiantar} onCancelar={fecharModal} />
         </Modal>
       )}
 

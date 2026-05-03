@@ -60,7 +60,7 @@ export default function PagamentoForm({ tipo, valorRestante, onSalvar, onCancela
           type="text"
           placeholder="Opcional"
           value={observacao}
-          onChange={(e) => setObservacao(e.target.value)}
+          onChange={(e) => setObservacao(e.target.value || '')}
         />
       </div>
 

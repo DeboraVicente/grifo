@@ -11,16 +11,9 @@ export default function AuthPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      if (mode === 'login') {
-        await signIn(form.email, form.senha)
-      } else {
-        await signUp(form.nome, form.email, form.senha)
-      }
-    } catch {
-      // error is set by hook
-    } finally {
-      setLoading(false)
-    }
+      if (mode === 'login') await signIn(form.email, form.senha)
+      else await signUp(form.nome, form.email, form.senha)
+    } catch { } finally { setLoading(false) }
   }
 
   const toggle = () => {
@@ -42,44 +35,25 @@ export default function AuthPage() {
           {mode === 'cadastro' && (
             <div className="field">
               <label>Nome</label>
-              <input
-                type="text"
-                placeholder="Seu nome"
-                value={form.nome}
-                onChange={(e) => setForm({ ...form, nome: e.target.value })}
-                required
-              />
+              <input type="text" placeholder="Seu nome" value={form.nome}
+                onChange={(e) => setForm({ ...form, nome: e.target.value })} required />
             </div>
           )}
           <div className="field">
             <label>E-mail</label>
-            <input
-              type="email"
-              placeholder="seu@email.com"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              required
-            />
+            <input type="email" placeholder="seu@email.com" value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })} required />
           </div>
           <div className="field">
             <label>Senha</label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              value={form.senha}
-              onChange={(e) => setForm({ ...form, senha: e.target.value })}
-              required
-              minLength={6}
-            />
+            <input type="password" placeholder="••••••••" value={form.senha}
+              onChange={(e) => setForm({ ...form, senha: e.target.value })} required minLength={6} />
           </div>
-
           {error && <p className="auth-error">{error}</p>}
-
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar conta'}
           </button>
         </form>
-
         <button className="auth-toggle" onClick={toggle}>
           {mode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entre'}
         </button>
