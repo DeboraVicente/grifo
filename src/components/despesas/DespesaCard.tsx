@@ -12,6 +12,8 @@ const METODO_LABEL: Record<string, string> = {
 interface Props {
   despesa: Despesa
   isRateadosPendente?: boolean
+  isRateioAceito?: boolean
+  meuUserId?: string
   onEditar: () => void
   onRemover: () => void
   onPagarParcela: (numeroParcela: number) => void
@@ -27,6 +29,8 @@ const fmtData = (data: string) =>
 export default function DespesaCard({
   despesa,
   isRateadosPendente,
+  isRateioAceito,
+  meuUserId,
   onEditar,
   onRemover,
   onPagarParcela,
@@ -43,11 +47,17 @@ export default function DespesaCard({
   const valorTotal = despesa.valorTotal ?? (despesa as any).valor ?? 0
   const valorParcela = despesa.valorParcela ?? valorTotal
 
+  // Rateio logic
   const temRateio = despesa.rateio?.ativo
   const participantesRateio = temRateio ? (despesa.rateio as any).participantes ?? [] : []
 
-  const meuParticipante = isRateadosPendente ? participantesRateio.find((p: any) => p.userId !== undefined) : null
-  const valorParaMim = isRateadosPendente ? (meuParticipante?.valorDevidoParcela ?? meuParticipante?.valorDevido ?? 0) : null
+  // Meu participante: usado em aprovação E em rateio aceito
+  const meuParticipante = (isRateadosPendente || isRateioAceito)
+   ? participantesRateio.find((p: any) => p.userId === meuUserId) 
+   : null
+  const valorParaMim = (isRateadosPendente || isRateioAceito)
+   ? (meuParticipante?.valorDevidoParcela ?? meuParticipante?.valorDevido ?? 0) 
+   : null
 
   return (
     <div className={`despesa-card ${despesa.pago ? 'paga' : ''} ${isRateadosPendente ? 'modo-aprovacao' : ''}`}>
@@ -70,14 +80,20 @@ export default function DespesaCard({
               <><span className="dot">·</span>
                 <span className="tag-aprovacao-pendente">Convite pendente</span></>
             )}
+            {isRateioAceito && (
+              <><span className="dot">·</span>
+                <span className="tag-rateio-aceito">🤝 rateio</span></>
+            )}
           </div>
         </div>
 
         <div className="card-valor">
-          {isRateadosPendente ? (
+          {(isRateadosPendente|| isRateioAceito) && valorParaMim !== null ? (
             <>
-              <span className="valor-minha-parte">{fmt(valorParaMim ?? 0)}</span>
-              <span className="valor-total-rateio">de {fmt(valorTotal)}</span>
+              <span className="valor-minha-parte">{fmt(valorParaMim)}</span>
+              <span className="valor-total-rateio">
+                {totalParcelas > 1 ? `${totalParcelas}x · ` : ''}total {fmt(valorTotal)}
+              </span>
             </>
           ) : (
             <>
@@ -109,6 +125,26 @@ export default function DespesaCard({
               <button className="acao-btn btn-aceitar-full" onClick={(e) => { e.stopPropagation(); onAceitarRateio?.(); }}>
                 Aceitar e Adicionar
               </button>
+            </div>
+          ) : isRateioAceito ? (
+            <div className="rateio-aceito-info">
+              <div className="rateio-aceito-row">
+                <span className="rateio-aceito-label">Minha parte</span>
+                <span className="rateio-aceito-valor">{fmt(valorParaMim ?? 0)}</span>
+              </div>
+              {totalParcelas > 1 && (
+                <div className="rateio-aceito-row">
+                  <span className="rateio-aceito-label">Por parcela</span>
+                  <span className="rateio-aceito-valor">
+                    {fmt(meuParticipante?.valorDevidoParcela ?? (valorParaMim ?? 0) / totalParcelas)}/mês
+                  </span>
+                </div>
+              )}
+              <div className="rateio-aceito-row">
+                <span className="rateio-aceito-label">Total da despesa</span>
+                <span className="rateio-aceito-valor-total">{fmt(valorTotal)}</span>
+              </div>
+              {despesa.observacoes && <p className="detalhe-obs">{despesa.observacoes}</p>}
             </div>
           ) : (
             <>
@@ -207,6 +243,11 @@ export default function DespesaCard({
       .acao-btn { flex: 1; background: #FFFFFF; border: 1px solid #E0E0E0; color: #636E72; border-radius: 10px; padding: 0.6rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
       .acao-adiantar { color: #C8A45A; border-color: #F9E79F; }
       .acao-remover { flex: 0; color: #E74C3C; }
+
+      .rateio-aceito-row { display: flex; justify-content: space-between; align-items: center; }
+      .rateio-aceito-label { color: #95A5A6; font-size: 0.8rem; }
+      .rateio-aceito-valor { color: #2D3436; font-size: 0.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .rateio-aceito-valor-total { color: #95A5A6; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
     `}</style>
     </div>
   )

@@ -25,23 +25,44 @@ export default function DespesasPage() {
 
   const fecharModal = () => { setModal(null); setSelecionada(null) }
 
+  // 1. Separa rateios por status do usuário
   const rateiosPendentes = despesasRateadas.filter((d) => {
     if (!d.rateio?.ativo) return false
     const participante = (d.rateio as any).participantes?.find((p: any) => p.userId === user?.uid)
     return participante?.status === 'pendente'
   })
 
+  // Rateios aceitos = despesas de outros que o usuário aceitou participar
+  const rateiosAceitos = despesasRateadas.filter((d) => {
+    if (!d.rateio?.ativo) return false
+    const p = (d.rateio as any).participantes?.find((p: any) => p.userId === user?.uid)
+    return p?.status === 'aceito'
+  })
+  
+  // Helper: extrai o valor devido pelo usuário numa despesa rateada
+  const meuValorRateio = (d: Despesa): number => {
+    const p = (d.rateio as any).participantes?.find((p: any) => p.userId === user?.uid)
+    return p?.valorDevido ?? 0
+  }
+  const meuValorRateioMes = (d: Despesa): number => {
+    const p = (d.rateio as any).participantes?.find((p: any) => p.userId === user?.uid)
+    return p?.valorDevidoParcela ?? p?.valorDevido ?? 0
+  }
+
+  // 2. Lógica de Filtragem da Lista
   const despesasExibidas = (() => {
     if (filtro === 'rateados-pendente') return rateiosPendentes
-    return despesas.filter((d) => {
-      if (filtro === 'todas') return true
+    const proprias = despesas.filter((d) => {
       if (filtro === 'rateados') return d.rateio?.ativo && (d.rateio as any).participantes.some((p: any) => p.userId === user?.uid)
       if (filtro === 'pendentes') return !d.pago
       if (filtro === 'pagas') return d.pago
       return true
     })
+    const aceitas = filtro === 'pagas' ? [] : rateiosAceitos.filter(d => !d.pago)
+    return [...proprias, ...aceitas]
   })()
 
+  // 3. Handlers
   const handleCriar = async (form: DespesaFormType) => { await criar(form); fecharModal() }
   const handleEditar = async (form: DespesaFormType) => {
     if (!selecionada) return
@@ -66,11 +87,13 @@ export default function DespesasPage() {
     setSelecionada(d); setParcelaSelecionada(numeroParcela); setModal('pagar')
   }
 
+  // 4. Cálculos de Resumo (Cards de cima)
   const agora = new Date()
   const mesAtual = agora.getMonth()
   const anoAtual = agora.getFullYear()
 
-  const totalMesAtual = despesas.reduce((acc, d) => {
+  // Soma das próprias despesas no mês
+  const totalMesProprio = despesas.reduce((acc, d) => {
     if (!d.listaParcelas || d.listaParcelas.length === 0)
       return acc + (!d.pago ? (d.valorTotal ?? 0) : 0)
     return acc + d.listaParcelas
@@ -81,11 +104,27 @@ export default function DespesasPage() {
       .reduce((s, p) => s + p.valor, 0)
   }, 0)
 
-  const totalRestanteFuturo = despesas.reduce((acc, d) => {
-    if (d.pago) return acc
-    if (!d.listaParcelas || d.listaParcelas.length === 0) return acc + (d.valorTotal ?? 0)
-    return acc + d.listaParcelas.filter(p => !p.pago).reduce((s, p) => s + p.valor, 0)
+  // Soma da parte do usuário nas despesas rateadas aceitas no mês
+  const totalMesRateio = rateiosAceitos
+  .filter(d => !d.pago)
+  .reduce((acc, d) => {
+    // Se parcelado, usa valorDevidoParcela; se à vista, valorDevido
+    return acc + meuValorRateioMes(d)
   }, 0)
+
+ const totalMesAtual = totalMesProprio + totalMesRateio
+
+ const totalRestanteProprio = despesas.reduce((acc, d) => {
+  if (d.pago) return acc
+  if (!d.listaParcelas || d.listaParcelas.length === 0) return acc + (d.valorTotal ?? 0)
+  return acc + d.listaParcelas.filter(p => !p.pago).reduce((s, p) => s + p.valor, 0)
+}, 0)
+
+  const totalRestanteRateio = rateiosAceitos
+    .filter(d => !d.pago)
+    .reduce((acc, d) => acc + meuValorRateio(d), 0)
+
+  const totalRestanteFuturo = totalRestanteProprio + totalRestanteRateio
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   const parcelaObj = selecionada?.listaParcelas?.find((p) => p.numero === parcelaSelecionada)
@@ -96,10 +135,23 @@ export default function DespesasPage() {
     <div className="despesas-page">
       <div className="resumo-cards">
         <div className="resumo-card principal">
-          <span className="resumo-label">Para pagar no mês</span>
+          <span className="resumo-label">Total para pagar no mês</span>
           <span className="resumo-valor">{fmt(totalMesAtual)}</span>
           <div className="resumo-indicador">Vence em breve</div>
         </div>
+
+        <div className="resumo-card secundario">
+          <span className="resumo-label">Despesas próprias</span>
+          <span className="resumo-valor">{fmt(totalMesProprio)}</span>
+          <div className="resumo-indicador">Próprias</div>
+        </div>
+
+        <div className="resumo-card secundario">
+          <span className="resumo-label">Despesas rateadas</span>
+          <span className="resumo-valor">{fmt(totalMesRateio)}</span>
+          <div className="resumo-indicador">Rateados</div>
+        </div>
+       
         <div className="resumo-card secundario">
           <span className="resumo-label">Saldo devedor total</span>
           <span className="resumo-valor">{fmt(totalRestanteFuturo)}</span>
