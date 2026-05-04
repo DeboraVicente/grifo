@@ -57,39 +57,29 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
     (inicial?.rateio?.ativo ? (inicial.rateio as any).tipo : 'pessoa') ?? 'pessoa'
   )
   const [participantes, setParticipantes] = useState<{ amigoId: string; renda: number }[]>([])
-  const [amigoSelecionado, setAmigoSelecionado] = useState('')
-
+  
   const set = (key: keyof DespesaFormType, value: any) => setForm((f) => ({ ...f, [key]: value }))
 
   const isCredito = form.metodoPagamento === 'credito'
   const valorParcela = form.parcelas > 1 && form.valorTotal > 0 ? form.valorTotal / form.parcelas : null
-
-  const adicionarParticipante = () => {
-    if (!amigoSelecionado) return
-    if (participantes.find((p) => p.amigoId === amigoSelecionado)) return
-    setParticipantes((ps) => [...ps, { amigoId: amigoSelecionado, renda: 0 }])
-    setAmigoSelecionado('')
-  }
-
-  const removerParticipante = (id: string) =>
-    setParticipantes((ps) => ps.filter((p) => p.amigoId !== id))
-
+  
   const setRenda = (amigoId: string, renda: number) =>
     setParticipantes((ps) => ps.map((p) => p.amigoId === amigoId ? { ...p, renda } : p))
 
-  // Calcula preview do rateio
+  // Calcula preview do rateio — sempre sobre valorTotal (não parcela)
   const previewRateio = () => {
-    const valor = valorParcela ?? form.valorTotal
-    if (!valor || participantes.length === 0) return []
+    const valorBase = form.valorTotal   // rateio é sobre o total
+    if (!valorBase || participantes.length === 0) return []
     const total = participantes.length + 1 // +1 = o próprio usuário
 
     if (tipoRateio === 'pessoa') {
-      const parte = valor / total
+      const parte = valorBase / total
+      const parteParc = parte / form.parcelas  // exibição mensal se parcelado
       return [
-        { nome: 'Você', valor: parte, pct: (100 / total) },
+        { nome: 'Você', valor: parteParc, valorTotal: parte, pct: (100 / total) },
         ...participantes.map((p) => {
           const amigo = amigos.find((a) => a.id === p.amigoId)
-          return { nome: amigo?.nome ?? '?', valor: parte, pct: (100 / total) }
+          return { nome: amigo?.nome ?? '?', valor: parteParc, valorTotal: parte, pct: (100 / total) }
         }),
       ]
     } else {
@@ -97,11 +87,11 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
       const rendaDefault = rendas.length > 0 ? Math.max(...rendas, 1) : 1
       const rendaTotal = rendaDefault + rendas.reduce((s, r) => s + r, 0)
       return [
-        { nome: 'Você', valor: (rendaDefault / rendaTotal) * valor, pct: (rendaDefault / rendaTotal) * 100 },
+        { nome: 'Você', valor: (rendaDefault / rendaTotal) * valorBase / form.parcelas, valorTotal: (rendaDefault / rendaTotal) * valorBase, pct: (rendaDefault / rendaTotal) * 100 },
         ...participantes.map((p) => {
           const amigo = amigos.find((a) => a.id === p.amigoId)
           const pct = rendaTotal > 0 ? (p.renda / rendaTotal) * 100 : 0
-          return { nome: amigo?.nome ?? '?', valor: (p.renda / rendaTotal) * valor, pct }
+          return { nome: amigo?.nome ?? '?', valor: (p.renda / rendaTotal) * valorBase / form.parcelas, valorTotal: (p.renda / rendaTotal) * valorBase, pct }
         }),
       ]
     }
@@ -111,27 +101,35 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
     e.preventDefault()
     setLoading(true)
     try {
-      const rateio = rateioAtivo && participantes.length > 0
-        ? {
-            ativo: true as const,
-            tipo: tipoRateio,
-            participantes: participantes.map((p) => {
-              const amigo = amigos.find((a) => a.id === p.amigoId)!
-              const preview = previewRateio().find((pr) => pr.nome === amigo.nome)
-              return {
-                userId: p.amigoId,
-                nome: amigo.nome,
-                email: amigo.email,
-                renda: p.renda,
-                percentual: preview?.pct ?? 0,
-                valorDevido: preview?.valor ?? 0,
-                valorPago: 0,
-                status: 'pendente',
-              }
-            }),
-          }
-        : { ativo: false as const }
+      let rateio: any
 
+      if (rateioAtivo && participantes.length > 0) {
+        // preview[0] = Você, preview[1..n] = participantes na mesma ordem
+        const prev = previewRateio()
+
+        const participantesRateio = participantes.map((p, idx) => {
+          const amigo = amigos.find((a) => a.id === p.amigoId)!
+          const previewItem = prev[idx + 1] // +1 pula o "Você"
+          return {
+            userId: p.amigoId,
+            nome: amigo.nome,
+            email: amigo.email,
+            renda: p.renda,
+            percentual: previewItem?.pct ?? 0,
+            valorDevido: (previewItem as any)?.valorTotal ?? 0,
+            valorDevidoParcela: previewItem?.valor ?? 0,
+            valorPago: 0,
+            status: 'pendente',
+          }
+        })
+
+        rateio = { ativo: true, tipo: tipoRateio, participantes: participantesRateio }
+      } else {
+        rateio = { ativo: false }
+      }
+
+      console.log('[Grifo] handleSubmit estado:', { rateioAtivo, participantesCount: participantes.length, participantes, amigos })
+      console.log('[Grifo] handleSubmit rateio montado:', JSON.stringify(rateio, null, 2))
       await onSalvar({ ...form, rateio })
     } finally {
       setLoading(false)
@@ -139,7 +137,6 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
   }
 
   const preview = previewRateio()
-  const amigosDisponiveis = amigos.filter((a) => !participantes.find((p) => p.amigoId === a.id))
 
   return (
     <form onSubmit={handleSubmit} className="despesa-form">
@@ -192,7 +189,6 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
           </div>
         )}
 
-        {/* Categoria */}
         <div className="field full">
           <label>Categoria</label>
           <select
@@ -210,77 +206,121 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
 
         {/* ── Rateio ── */}
         <div className="field full">
-          <label className="checkbox-label">
-            <input type="checkbox" checked={rateioAtivo}
-              onChange={(e) => { setRateioAtivo(e.target.checked); if (!e.target.checked) setParticipantes([]) }} />
-            <span>Ratear esta despesa</span>
-          </label>
+          <button
+            type="button"
+            className={`rateio-toggle-header ${rateioAtivo ? 'ativo' : ''}`}
+            onClick={() => { setRateioAtivo(!rateioAtivo); if (rateioAtivo) setParticipantes([]) }}
+          >
+            <div className="rateio-header-left">
+              <span className="rateio-icon">🤝</span>
+              <div>
+                <span className="rateio-header-titulo">Ratear despesa</span>
+                <span className="rateio-header-sub">
+                  {participantes.length > 0
+                    ? `${participantes.length + 1} pessoas · ${tipoRateio === 'pessoa' ? 'igualitário' : 'por renda'}`
+                    : 'Dividir com amigos'}
+                </span>
+              </div>
+            </div>
+            <div className={`rateio-toggle-pill ${rateioAtivo ? 'on' : 'off'}`}>
+              <div className="rateio-toggle-dot" />
+            </div>
+          </button>
 
           {rateioAtivo && (
             <div className="rateio-box">
-              {/* Tipo */}
-              <div className="rateio-tipo">
-                <label className="radio-label">
-                  <input type="radio" name="tipoRateio" value="pessoa"
-                    checked={tipoRateio === 'pessoa'} onChange={() => setTipoRateio('pessoa')} />
-                  <span>Igualitário</span>
-                </label>
-                <label className="radio-label">
-                  <input type="radio" name="tipoRateio" value="renda"
-                    checked={tipoRateio === 'renda'} onChange={() => setTipoRateio('renda')} />
-                  <span>Por renda</span>
-                </label>
-              </div>
-
-              {/* Adicionar amigo */}
               {amigos.length === 0 ? (
-                <p className="rateio-hint">Adicione amigos na aba Conta para ratear despesas.</p>
+                <div className="rateio-empty">
+                  <span>👥</span>
+                  <p>Adicione amigos na aba <strong>Conta</strong> para ratear despesas.</p>
+                </div>
               ) : (
-                <div className="rateio-add">
-                  <select value={amigoSelecionado} onChange={(e) => setAmigoSelecionado(e.target.value)}
-                    className="rateio-select">
-                    <option value="">Selecionar amigo...</option>
-                    {amigosDisponiveis.map((a) => (
-                      <option key={a.id} value={a.id}>{a.nome}</option>
-                    ))}
-                  </select>
-                  <button type="button" className="btn-add-amigo" onClick={adicionarParticipante}
-                    disabled={!amigoSelecionado}>+</button>
-                </div>
-              )}
-
-              {/* Participantes */}
-              {participantes.map((p) => {
-                const amigo = amigos.find((a) => a.id === p.amigoId)
-                return (
-                  <div key={p.amigoId} className="participante-row">
-                    <span className="participante-nome">{amigo?.nome}</span>
-                    {tipoRateio === 'renda' && (
-                      <input type="number" min="0" step="100" placeholder="Renda (R$)"
-                        className="participante-renda"
-                        value={p.renda || ''}
-                        onChange={(e) => setRenda(p.amigoId, parseFloat(e.target.value) || 0)} />
-                    )}
-                    <button type="button" className="btn-remover-participante"
-                      onClick={() => removerParticipante(p.amigoId)}>✕</button>
+                <>
+                  {/* Tipo de rateio */}
+                  <div className="rateio-tipo-tabs">
+                    <button type="button"
+                      className={`tipo-tab ${tipoRateio === 'pessoa' ? 'active' : ''}`}
+                      onClick={() => setTipoRateio('pessoa')}>
+                      ⚖️ Igualitário
+                    </button>
+                    <button type="button"
+                      className={`tipo-tab ${tipoRateio === 'renda' ? 'active' : ''}`}
+                      onClick={() => setTipoRateio('renda')}>
+                      💰 Por renda
+                    </button>
                   </div>
-                )
-              })}
 
-              {/* Preview */}
-              {preview.length > 0 && form.valorTotal > 0 && (
-                <div className="rateio-preview">
-                  <span className="preview-titulo">Preview do rateio {isCredito && form.parcelas > 1 ? '(por parcela)' : ''}</span>
-                  {preview.map((p, i) => (
-                    <div key={i} className="preview-row">
-                      <span>{p.nome}</span>
-                      <div className="preview-bar-wrap">
-                        <div className="preview-bar" style={{ width: `${p.pct}%` }} />
+                  {/* Amigos como cards toggle */}
+                  <div className="amigos-lista">
+                    <span className="amigos-label">Selecione quem participa</span>
+                    {amigos.map((amigo) => {
+                      const selecionado = participantes.some((p) => p.amigoId === amigo.id)
+                      const participante = participantes.find((p) => p.amigoId === amigo.id)
+                      return (
+                        <div key={amigo.id} className={`amigo-toggle ${selecionado ? 'selecionado' : ''}`}>
+                          <button type="button" className="amigo-toggle-btn"
+                            onClick={() => {
+                              if (selecionado) {
+                                setParticipantes((ps) => ps.filter((p) => p.amigoId !== amigo.id))
+                              } else {
+                                setParticipantes((ps) => [...ps, { amigoId: amigo.id, renda: 0 }])
+                              }
+                            }}>
+                            <span className="amigo-avatar-sm">{amigo.nome.charAt(0).toUpperCase()}</span>
+                            <div className="amigo-info-sm">
+                              <span className="amigo-nome-sm">{amigo.nome}</span>
+                              {selecionado && preview.length > 0 && form.valorTotal > 0 && (() => {
+                                const idx = participantes.findIndex(p => p.amigoId === amigo.id)
+                                const prev = preview[idx + 1]
+                                return prev ? (
+                                  <span className="amigo-parte">
+                                    {fmt(prev.valor)}{form.parcelas > 1 ? '/mês' : ''}
+                                  </span>
+                                ) : null
+                              })()}
+                            </div>
+                            <div className={`amigo-check-box ${selecionado ? 'on' : ''}`}>
+                              {selecionado ? '✓' : ''}
+                            </div>
+                          </button>
+                          {selecionado && tipoRateio === 'renda' && (
+                            <div className="renda-field">
+                              <span className="renda-label">Renda mensal de {amigo.nome.split(' ')[0]}</span>
+                              <input type="number" min="0" step="100" placeholder="R$ 0,00"
+                                className="participante-renda"
+                                value={participante?.renda || ''}
+                                onChange={(e) => setRenda(amigo.id, parseFloat(e.target.value) || 0)} />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Preview resumido */}
+                  {preview.length > 0 && form.valorTotal > 0 && (
+                    <div className="rateio-preview">
+                      <div className="preview-header">
+                        <span className="preview-titulo">Divisão</span>
+                        <span className="preview-total">{fmt(form.valorTotal)} total</span>
                       </div>
-                      <span className="preview-valor">{fmt(p.valor)}</span>
+                      {preview.map((p, i) => (
+                        <div key={i} className="preview-row">
+                          <span className="preview-nome">{p.nome}</span>
+                          <div className="preview-bar-wrap">
+                            <div className="preview-bar" style={{ width: `${p.pct}%` }} />
+                          </div>
+                          <div className="preview-valores">
+                            <span className="preview-valor">{fmt(p.valor)}{form.parcelas > 1 ? '/mês' : ''}</span>
+                            {form.parcelas > 1 && (
+                              <span className="preview-valor-total">{fmt((p as any).valorTotal)}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -393,6 +433,193 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
           font-weight: 500;
         }
         .radio-label input { accent-color: #C8A45A; }
+        .rateio-hint { color: #555; font-size: 0.82rem; font-style: italic; }
+        /* Rateio toggle header */
+        .rateio-toggle-header {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0.85rem 1rem; background: #F8F9FA;
+          border: 1.5px solid #E0E0E0; border-radius: 12px;
+          cursor: pointer; transition: all 0.2s; font-family: inherit; width: 100%;
+        }
+        .rateio-toggle-header.ativo { border-color: #C8A45A; background: rgba(200,164,90,0.04); }
+        .rateio-toggle-header:hover { border-color: #C8A45A; }
+        .rateio-header-left { display: flex; align-items: center; gap: 0.75rem; }
+        .rateio-icon { font-size: 1.2rem; }
+        .rateio-header-titulo { display: block; color: #2d3436; font-size: 0.88rem; font-weight: 600; text-align: left; }
+        .rateio-header-sub { display: block; color: #95A5A6; font-size: 0.75rem; text-align: left; margin-top: 0.1rem; }
+        .rateio-toggle-pill {
+          width: 40px; height: 22px; border-radius: 11px; position: relative;
+          transition: background 0.2s; flex-shrink: 0;
+        }
+        .rateio-toggle-pill.off { background: #DFE6ED; }
+        .rateio-toggle-pill.on { background: #C8A45A; }
+        .rateio-toggle-dot {
+          position: absolute; top: 3px; width: 16px; height: 16px;
+          border-radius: 50%; background: #fff; transition: left 0.2s;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+        .rateio-toggle-pill.off .rateio-toggle-dot { left: 3px; }
+        .rateio-toggle-pill.on .rateio-toggle-dot { left: 21px; }
+        .rateio-box {
+    margin-top: 1rem;
+    padding: 1.25rem;
+    background: #F8F9FA;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    border: 1px solid #F1F2F6;
+  }
+
+  /* Tabs de tipo de rateio mais modernas */
+  .rateio-tipo-tabs {
+    display: flex;
+    gap: 0.5rem;
+    background: #EDF0F2;
+    padding: 0.3rem;
+    border-radius: 12px;
+  }
+  .tipo-tab {
+    flex: 1;
+    padding: 0.6rem;
+    border: none;
+    border-radius: 9px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: transparent;
+    color: #7F8C8D;
+    transition: all 0.2s;
+  }
+  .tipo-tab.active {
+    background: #FFFFFF;
+    color: #C8A45A;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+
+  /* Grid de Amigos estilo "Contatos" */
+  .amigos-lista { display: flex; flex-direction: column; gap: 0.75rem; }
+  .amigos-label { 
+    color: #95A5A6; 
+    font-size: 0.65rem; 
+    font-weight: 700; 
+    text-transform: uppercase; 
+    letter-spacing: 0.05em; 
+  }
+
+  .amigo-toggle {
+    background: #FFFFFF;
+    border: 1px solid #F1F2F6;
+    border-radius: 14px;
+    padding: 0.75rem;
+    transition: all 0.2s;
+  }
+  .amigo-toggle.selecionado {
+    border-color: rgba(200,164,90,0.3);
+    box-shadow: 0 4px 12px rgba(200,164,90,0.06);
+  }
+
+  .amigo-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .amigo-avatar-sm {
+    width: 36px; height: 36px;
+    background: #F1F2F6;
+    color: #95A5A6;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+  .selecionado .amigo-avatar-sm {
+    background: rgba(200,164,90,0.1);
+    color: #C8A45A;
+  }
+
+  .amigo-info-sm { flex: 1; display: flex; flex-direction: column; }
+  .amigo-nome-sm { color: #2D3436; font-size: 0.88rem; font-weight: 600; }
+  .amigo-parte { color: #C8A45A; font-size: 0.75rem; font-weight: 700; }
+
+  .amigo-check-box {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    border: 2px solid #EDF0F2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.7rem;
+    transition: all 0.2s;
+  }
+  .amigo-check-box.on {
+    background: #C8A45A;
+    border-color: #C8A45A;
+  }
+
+  /* Campo de Renda quando selecionado */
+  .renda-field {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed #EDF0F2;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .renda-label { color: #95A5A6; font-size: 0.7rem; font-weight: 600; }
+  .participante-renda {
+    background: #F8F9FA !important;
+    padding: 0.6rem !important;
+    font-size: 0.85rem !important;
+  }
+
+  /* Preview de Divisão estilo Progress Bar */
+  .rateio-preview {
+    background: #FFFFFF;
+    padding: 1.25rem;
+    border-radius: 16px;
+    border: 1px solid #F1F2F6;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .preview-header { display: flex; justify-content: space-between; align-items: flex-end; }
+  .preview-titulo { color: #2D3436; font-size: 0.85rem; font-weight: 700; }
+  .preview-total { color: #95A5A6; font-size: 0.7rem; font-weight: 600; }
+
+  .preview-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .preview-nome { color: #636E72; font-size: 0.75rem; font-weight: 600; }
+  .preview-bar-wrap {
+    height: 6px;
+    background: #F1F2F6;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .preview-bar {
+    height: 100%;
+    background: #C8A45A;
+    border-radius: 3px;
+  }
+  .preview-valores {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .preview-valor { color: #2D3436; font-size: 0.8rem; font-weight: 700; }
+  .preview-valor-total { color: #BDC3C7; font-size: 0.65rem; font-weight: 500; }
 
         /* Ações do formulário */
         .form-actions {
@@ -402,6 +629,12 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
           padding-top: 1.5rem; 
           border-top: 1px solid #F1F2F6;
         }
+        .rateio-empty {
+          display: flex; align-items: center; gap: 0.75rem;
+          color: #95A5A6; font-size: 0.82rem; padding: 0.5rem;
+        }
+        .rateio-empty span { font-size: 1.5rem; }
+        .rateio-empty strong { color: #C8A45A; }
 
         .btn-primary {
           background: #C8A45A; 

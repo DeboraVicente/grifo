@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Perfis de usuário — qualquer autenticado pode ler (para busca de amigos)
+    match /usuarios/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Despesas
+    match /despesas/{despesaId} {
+      // Leitura: criador ou participante do rateio
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.userId ||
+        request.auth.uid in resource.data.rateioParticipantesIds
+      );
+
+      // Criação: apenas o próprio usuário
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.userId;
+
+      // Update: criador pode tudo; participante só pode atualizar rateio.participantes
+      allow update: if request.auth != null && (
+        // Criador tem acesso total
+        request.auth.uid == resource.data.userId
+        ||
+        // Participante pode responder ao rateio (aceitar/recusar)
+        (
+          request.auth.uid in resource.data.rateioParticipantesIds &&
+          // Só pode alterar o campo rateio — nada mais
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['rateio', 'atualizadoEm'])
+        )
+      );
+
+      allow delete: if request.auth != null &&
+        request.auth.uid == resource.data.userId;
+    }
+
+    // Caixinhas
+    match /caixinhas/{caixinhaId} {
+      allow read, write: if request.auth != null &&
+        request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.userId;
+    }
+
+    // Amizades
+    match /amizades/{amizadeId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.solicitanteId ||
+        request.auth.uid == resource.data.receptorId
+      );
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.solicitanteId;
+      // Receptor pode aceitar/recusar; solicitante não pode auto-aceitar
+      allow update: if request.auth != null &&
+        request.auth.uid == resource.data.receptorId;
+    }
+  }
+}

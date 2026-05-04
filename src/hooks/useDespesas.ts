@@ -76,6 +76,18 @@ export function useDespesas(userId: string | undefined) {
     const valorParcela = parseFloat((form.valorTotal / form.parcelas).toFixed(2))
     const listaParcelas = gerarParcelas(form.valorTotal, form.parcelas, form.data)
 
+    // Extrai participantes independente do tipo TS (evita problema com union type)
+    const rateioRaw = form.rateio as any
+    const participantesIds: string[] = rateioRaw?.ativo === true
+      ? (rateioRaw.participantes ?? []).map((p: any) => p.userId)
+      : []
+
+    console.log('[Grifo] Criando despesa com rateio:', {
+      rateioAtivo: rateioRaw?.ativo,
+      participantesIds,
+      rateio: rateioRaw,
+    })
+
     await addDoc(collection(db, 'despesas'), {
       nome: form.nome,
       categoria: form.categoria,
@@ -85,13 +97,11 @@ export function useDespesas(userId: string | undefined) {
       valorParcela,
       data: form.data,
       observacoes: form.observacoes,
-      rateio: form.rateio,
+      rateio: rateioRaw,
       listaParcelas,
       adiantamentos: [],
       pago: false,
-      rateioParticipantesIds: form.rateio.ativo
-        ? (form.rateio as any).participantes?.map((p: any) => p.userId) ?? []
-        : [],
+      rateioParticipantesIds: participantesIds,
       userId,
       criadoEm: serverTimestamp(),
       atualizadoEm: serverTimestamp(),

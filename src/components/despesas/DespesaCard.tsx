@@ -11,17 +11,29 @@ const METODO_LABEL: Record<string, string> = {
 
 interface Props {
   despesa: Despesa
+  isRateadosPendente?: boolean
   onEditar: () => void
   onRemover: () => void
   onPagarParcela: (numeroParcela: number) => void
   onAdiantar: () => void
+  onAceitarRateio?: () => void
+  onRecusarRateio?: () => void
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtData = (data: string) =>
   new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 
-export default function DespesaCard({ despesa, onEditar, onRemover, onPagarParcela, onAdiantar }: Props) {
+export default function DespesaCard({
+  despesa,
+  isRateadosPendente,
+  onEditar,
+  onRemover,
+  onPagarParcela,
+  onAdiantar,
+  onAceitarRateio,
+  onRecusarRateio
+}: Props) {
   const [expandido, setExpandido] = useState(false)
 
   const parcelasPagas = despesa.listaParcelas?.filter((p) => p.pago).length ?? 0
@@ -31,16 +43,18 @@ export default function DespesaCard({ despesa, onEditar, onRemover, onPagarParce
   const valorTotal = despesa.valorTotal ?? (despesa as any).valor ?? 0
   const valorParcela = despesa.valorParcela ?? valorTotal
 
-  // Rateio: pega a parte do criador (índice 0 não existe, mas mostra proporção)
   const temRateio = despesa.rateio?.ativo
   const participantesRateio = temRateio ? (despesa.rateio as any).participantes ?? [] : []
-  const totalParticipantes = participantesRateio.length + 1
-  const minhaParteRateio = temRateio ? valorParcela / totalParticipantes : null
+
+  const meuParticipante = isRateadosPendente ? participantesRateio.find((p: any) => p.userId !== undefined) : null
+  const valorParaMim = isRateadosPendente ? (meuParticipante?.valorDevidoParcela ?? meuParticipante?.valorDevido ?? 0) : null
 
   return (
-    <div className={`despesa-card ${despesa.pago ? 'paga' : ''}`}>
+    <div className={`despesa-card ${despesa.pago ? 'paga' : ''} ${isRateadosPendente ? 'modo-aprovacao' : ''}`}>
       <div className="card-main" onClick={() => setExpandido((v) => !v)}>
-        <div className="card-icon">{CATEGORIA_EMOJI[despesa.categoria] ?? '📦'}</div>
+        <div className="card-icon">
+          {isRateadosPendente ? '🤝' : (CATEGORIA_EMOJI[despesa.categoria] ?? '📦')}
+        </div>
 
         <div className="card-info">
           <div className="card-nome">{despesa.nome}</div>
@@ -48,22 +62,22 @@ export default function DespesaCard({ despesa, onEditar, onRemover, onPagarParce
             <span>{fmtData(despesa.data)}</span>
             <span className="dot">·</span>
             <span>{METODO_LABEL[despesa.metodoPagamento]}</span>
-            {totalParcelas > 1 && (
+            {totalParcelas > 1 && !isRateadosPendente && (
               <><span className="dot">·</span>
-              <span className="tag-parcela">{parcelasPagas}/{totalParcelas}</span></>
+                <span className="tag-parcela">{parcelasPagas}/{totalParcelas}</span></>
             )}
-            {temRateio && (
+            {isRateadosPendente && (
               <><span className="dot">·</span>
-              <span className="tag-rateio">rateio</span></>
+                <span className="tag-aprovacao-pendente">Convite pendente</span></>
             )}
           </div>
         </div>
 
         <div className="card-valor">
-          {minhaParteRateio ? (
+          {isRateadosPendente ? (
             <>
-              <span className="valor-minha-parte">{fmt(minhaParteRateio)}</span>
-              <span className="valor-total-rateio">de {fmt(totalParcelas > 1 ? valorParcela : valorTotal)}</span>
+              <span className="valor-minha-parte">{fmt(valorParaMim ?? 0)}</span>
+              <span className="valor-total-rateio">de {fmt(valorTotal)}</span>
             </>
           ) : (
             <>
@@ -77,8 +91,7 @@ export default function DespesaCard({ despesa, onEditar, onRemover, onPagarParce
         </div>
       </div>
 
-      {/* Barra progresso */}
-      {!despesa.pago && totalParcelas > 1 && (
+      {!despesa.pago && totalParcelas > 1 && !isRateadosPendente && (
         <div className="progresso-bar">
           <div className="progresso-fill" style={{ width: `${progresso}%` }} />
         </div>
@@ -88,247 +101,112 @@ export default function DespesaCard({ despesa, onEditar, onRemover, onPagarParce
         <div className="card-detalhes">
           {despesa.observacoes && <p className="detalhe-obs">{despesa.observacoes}</p>}
 
-          {totalAdiantado > 0 && (
-            <div className="detalhe-row">
-              <span>Adiantado:</span>
-              <span className="valor-gold">{fmt(totalAdiantado)}</span>
+          {isRateadosPendente ? (
+            <div className="card-acoes-aprovacao">
+              <button className="acao-btn btn-recusar-full" onClick={(e) => { e.stopPropagation(); onRecusarRateio?.(); }}>
+                Recusar Convite
+              </button>
+              <button className="acao-btn btn-aceitar-full" onClick={(e) => { e.stopPropagation(); onAceitarRateio?.(); }}>
+                Aceitar e Adicionar
+              </button>
             </div>
-          )}
-
-          {/* Participantes do rateio */}
-          {temRateio && participantesRateio.length > 0 && (
-            <div className="rateio-status">
-              <span className="rateio-status-titulo">Rateio</span>
-              {participantesRateio.map((p: any) => (
-                <div key={p.userId} className="rateio-participante">
-                  <span>{p.nome}</span>
-                  <span className={`rateio-badge ${p.status}`}>
-                    {p.status === 'pendente' ? '⏳ pendente' : p.status === 'aceito' ? '✓ aceito' : '✕ recusado'}
-                  </span>
-                  <span className="valor-gold">{fmt(p.valorDevido)}</span>
+          ) : (
+            <>
+              {totalAdiantado > 0 && (
+                <div className="detalhe-row">
+                  <span>Adiantado:</span>
+                  <span className="valor-gold">{fmt(totalAdiantado)}</span>
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          {/* Parcelas */}
-          {despesa.listaParcelas?.length > 0 && (
-            <div className="parcelas-lista">
-              {despesa.listaParcelas.map((p) => {
-                const totalPagoParcela = p.pagamentos?.reduce((s, pg) => s + pg.valor, 0) ?? 0
-                return (
-                  <div key={p.numero} className={`parcela-row ${p.pago ? 'parcela-paga' : ''}`}>
-                    <div className="parcela-info">
-                      <span className={`parcela-status ${p.pago ? 'ok' : ''}`}>
-                        {p.pago ? '✓' : p.numero}
+              {temRateio && participantesRateio.length > 0 && (
+                <div className="rateio-status">
+                  <span className="rateio-status-titulo">Status do Rateio</span>
+                  {participantesRateio.map((p: any) => (
+                    <div key={p.userId} className="rateio-participante">
+                      <span>{p.nome}</span>
+                      <span className={`rateio-badge ${p.status}`}>
+                        {p.status === 'pendente' ? '⏳' : p.status === 'aceito' ? '✓' : '✕'}
                       </span>
-                      <span className="parcela-data">{fmtData(p.dataVencimento)}</span>
-                      <span className="parcela-valor">{fmt(p.valor)}</span>
-                      {!p.pago && totalPagoParcela > 0 && (
-                        <span className="parcela-pago-parcial">({fmt(totalPagoParcela)} pago)</span>
+                      <span className="valor-gold">{fmt(p.valorDevido)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {despesa.listaParcelas?.length > 0 && (
+                <div className="parcelas-lista">
+                  {despesa.listaParcelas.map((p) => (
+                    <div key={p.numero} className={`parcela-row ${p.pago ? 'parcela-paga' : ''}`}>
+                      <div className="parcela-info">
+                        <span className={`parcela-status ${p.pago ? 'ok' : ''}`}>
+                          {p.pago ? '✓' : p.numero}
+                        </span>
+                        <span className="parcela-data">{fmtData(p.dataVencimento)}</span>
+                        <span className="parcela-valor">{fmt(p.valor)}</span>
+                      </div>
+                      {!p.pago && (
+                        <button className="btn-pagar-parcela" onClick={() => onPagarParcela(p.numero)}>
+                          Pagar
+                        </button>
                       )}
                     </div>
-                    {!p.pago && (
-                      <button className="btn-pagar-parcela" onClick={() => onPagarParcela(p.numero)}>
-                        Pagar
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
+                  ))}
+                </div>
+              )}
 
-          <div className="card-acoes">
-            {!despesa.pago && (
-              <button className="acao-btn acao-adiantar" onClick={onAdiantar}>⬆ Adiantamento</button>
-            )}
-            <button className="acao-btn" onClick={onEditar}>✏️ Editar</button>
-            <button className="acao-btn acao-remover" onClick={onRemover}>🗑</button>
-          </div>
+              <div className="card-acoes">
+                {!despesa.pago && (
+                  <button className="acao-btn acao-adiantar" onClick={onAdiantar}>⬆ Adiantar</button>
+                )}
+                <button className="acao-btn" onClick={onEditar}>✏️ Editar</button>
+                <button className="acao-btn acao-remover" onClick={onRemover}>🗑</button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
-    <style>{`
+      <style>{`
       .despesa-card {
-        background: #FFFFFF; 
-        border: 1px solid #F1F2F6; 
-        border-radius: 16px;
-        overflow: hidden; 
-        transition: all 0.2s ease;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+        background: #FFFFFF; border: 1px solid #F1F2F6; border-radius: 16px;
+        overflow: hidden; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.02);
       }
+      .despesa-card.modo-aprovacao { border-left: 4px solid #3498DB; background: #F7FBFF; }
       
-      .despesa-card:hover { 
-        transform: translateY(-2px);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-        border-color: #E8E8E8;
-      }
-
-      .despesa-card.paga { 
-        opacity: 0.7; 
-        background: #FAFAFA;
-      }
-
-      .card-main {
-        display: flex; 
-        align-items: center; 
-        gap: 1rem;
-        padding: 1.25rem; 
-        cursor: pointer;
-      }
-
+      .card-main { display: flex; align-items: center; gap: 1rem; padding: 1.25rem; cursor: pointer; }
       .card-icon { 
-        font-size: 1.2rem; 
-        width: 44px; 
-        height: 44px; 
-        background: #F8F9FA;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0; 
+        font-size: 1.2rem; width: 44px; height: 44px; background: #F8F9FA;
+        border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; 
       }
+      .modo-aprovacao .card-icon { background: #EBF5FB; }
 
       .card-info { flex: 1; min-width: 0; }
+      .card-nome { font-size: 1rem; font-weight: 600; color: #2D3436; margin-bottom: 2px; }
+      .card-meta { display: flex; align-items: center; gap: 0.4rem; color: #95A5A6; font-size: 0.75rem; }
+      .tag-aprovacao-pendente { color: #3498DB; font-weight: 700; }
+
+      .card-valor { display: flex; flex-direction: column; align-items: flex-end; }
+      .valor-minha-parte { color: #2D3436; font-size: 1.1rem; font-weight: 800; }
+      .valor-total-rateio { font-size: 0.7rem; color: #95A5A6; }
+
+      .card-detalhes { padding: 1.25rem; background: #FCFCFD; border-top: 1px solid #F1F2F6; display: flex; flex-direction: column; gap: 1rem; }
       
-      .card-nome {
-        font-size: 1rem; 
-        font-weight: 600;
-        color: #2D3436;
-        margin-bottom: 2px;
-      }
+      .card-acoes-aprovacao { display: flex; gap: 0.8rem; }
+      .btn-aceitar-full { background: #2ECC71 !important; color: white !important; border: none !important; }
+      .btn-recusar-full { background: #FDFEFE !important; color: #E74C3C !important; border: 1px solid #FADBD8 !important; }
 
-      .card-meta {
-        display: flex; 
-        align-items: center; 
-        gap: 0.4rem;
-        color: #95A5A6; 
-        font-size: 0.75rem;
-        font-weight: 500;
-      }
-
-      .tag-parcela {
-        color: #C8A45A;
-        font-weight: 700;
-        font-size: 0.7rem;
-        text-transform: uppercase;
-      }
-
-      .card-valor {
-        display: flex; 
-        flex-direction: column; 
-        align-items: flex-end;
-        flex-shrink: 0;
-      }
-
-      .card-valor span { 
-        color: #2D3436; 
-        font-size: 1.05rem; 
-        font-weight: 700;
-        font-variant-numeric: tabular-nums; 
-      }
-
-      .valor-parcela { 
-        color: #95A5A6 !important; 
-        font-size: 0.75rem !important; 
-        font-weight: 500 !important;
-      }
-
-      .riscado { 
-        color: #B2BEC3 !important; 
-        text-decoration: line-through; 
-        font-weight: 400 !important;
-      }
-
-      /* Barra de progresso discreta */
-      .progresso-bar { height: 3px; background: #F1F2F6; }
-      .progresso-fill { 
-        height: 100%; 
-        background: #C8A45A; 
-        border-radius: 0 2px 2px 0;
-        box-shadow: 0 0 8px rgba(200,164,90,0.3);
-      }
-
-      .card-detalhes {
-        padding: 1.25rem; 
-        background: #FCFCFD;
-        border-top: 1px solid #F1F2F6;
-        display: flex; 
-        flex-direction: column; 
-        gap: 1rem;
-      }
-
-      .parcela-row {
-        display: flex; 
-        align-items: center; 
-        justify-content: space-between;
-        padding: 0.7rem 0.8rem; 
-        background: #FFFFFF; 
-        border-radius: 12px;
-        border: 1px solid #F1F2F6;
-      }
-
-      .parcela-status {
-        width: 22px; 
-        height: 22px; 
-        border-radius: 6px;
-        background: #F8F9FA; 
-        color: #B2BEC3;
-        font-size: 0.7rem; 
-        font-weight: 700;
-      }
-
-      .parcela-status.ok { 
-        background: #E8F5E9; 
-        color: #2ECC71; 
-        border: none;
-      }
-
-      .parcela-valor { color: #2D3436; font-weight: 600; }
-
-      .btn-pagar-parcela {
-        background: #C8A45A; 
-        color: white; 
-        border: none;
-        border-radius: 8px; 
-        padding: 0.4rem 0.8rem;
-        font-size: 0.75rem; 
-        font-weight: 600;
-        cursor: pointer;
-      }
-
-      .card-acoes { 
-        display: flex; 
-        gap: 0.6rem; 
-        margin-top: 0.5rem;
-      }
-
-      .acao-btn {
-        flex: 1;
-        background: #FFFFFF; 
-        border: 1px solid #E0E0E0; 
-        color: #636E72;
-        border-radius: 10px; 
-        padding: 0.6rem; 
-        font-size: 0.75rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-
-      .acao-btn:hover { background: #F8F9FA; border-color: #B2BEC3; }
+      .rateio-status { background: #F8F9FA; padding: 1rem; border-radius: 12px; display: flex; flex-direction: column; gap: 0.6rem; }
+      .rateio-status-titulo { font-size: 0.7rem; font-weight: 700; color: #95A5A6; text-transform: uppercase; }
+      .rateio-participante { display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; }
       
-      .acao-remover { 
-        flex: 0; 
-        padding: 0.6rem 0.8rem;
-        color: #E74C3C;
-      }
+      .parcelas-lista { display: flex; flex-direction: column; gap: 0.6rem; }
+      .parcela-row { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem; background: white; border-radius: 10px; border: 1px solid #F1F2F6; }
       
-      .acao-remover:hover { 
-        background: #FFF5F5; 
-        border-color: #FAB1A0; 
-      }
+      .card-acoes { display: flex; gap: 0.6rem; }
+      .acao-btn { flex: 1; background: #FFFFFF; border: 1px solid #E0E0E0; color: #636E72; border-radius: 10px; padding: 0.6rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+      .acao-adiantar { color: #C8A45A; border-color: #F9E79F; }
+      .acao-remover { flex: 0; color: #E74C3C; }
     `}</style>
     </div>
   )
