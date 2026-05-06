@@ -20,17 +20,22 @@ service cloud.firestore {
       allow create: if request.auth != null &&
         request.auth.uid == request.resource.data.userId;
 
-      // Update: criador pode tudo; participante só pode atualizar rateio.participantes
+      // Update: criador pode tudo; participante só pode atualizar rateio e atualizadoEm
       allow update: if request.auth != null && (
         // Criador tem acesso total
         request.auth.uid == resource.data.userId
         ||
-        // Participante pode responder ao rateio (aceitar/recusar)
+        // Participante pode responder ao rateio e registrar pagamento da sua parte
         (
           request.auth.uid in resource.data.rateioParticipantesIds &&
-          // Só pode alterar o campo rateio — nada mais
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['rateio', 'atualizadoEm'])
+            .hasOnly(['rateio', 'atualizadoEm']) &&
+          // Não pode desativar o rateio
+          request.resource.data.rateio.ativo == resource.data.rateio.ativo &&
+          // Não pode mudar o tipo de cálculo
+          request.resource.data.rateio.get('tipo', null) == resource.data.rateio.get('tipo', null) &&
+          // Não pode adicionar nem remover participantes
+          request.resource.data.rateio.participantes.size() == resource.data.rateio.participantes.size()
         )
       );
 

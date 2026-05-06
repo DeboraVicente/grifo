@@ -1,13 +1,11 @@
 import { useState } from 'react'
 import { useAuthContext } from '../lib/AuthContext'
 import { useAmizades } from '../hooks/useAmizades'
-import { db } from '../lib/firebase'
-import { doc, setDoc } from 'firebase/firestore'
 import type { Amizade } from '../types'
 
 export default function ContaPage() {
   const { user, signOut } = useAuthContext()
-  const { amigos, pendentesRecebidas, amizades, loading, enviarSolicitacao, responderSolicitacao } =
+  const { amigos, pendentesRecebidas, amizades, enviarSolicitacao, responderSolicitacao } =
     useAmizades(user?.uid, user?.email ?? '', user?.displayName ?? '')
 
   const [email, setEmail] = useState('')

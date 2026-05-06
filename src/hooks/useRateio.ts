@@ -4,7 +4,7 @@ import {
   doc, serverTimestamp, Timestamp,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import type { Despesa } from '../types'
+import type { Despesa, Pagamento, RateioAtivo } from '../types'
 
 // Despesas rateadas onde o usuário é participante (criadas por outro usuário)
 export function useRateioRecebido(userId: string | undefined) {
@@ -64,5 +64,34 @@ export function useRateioRecebido(userId: string | undefined) {
     })
   }
 
-  return { despesasRateadas, loading, responderRateio }
+  const pagarParteRateio = async (
+    despesaId: string,
+    despesa: Despesa,
+    userId: string,
+    pagamento: Omit<Pagamento, 'id' | 'userId'>
+  ) => {
+    if (!despesa.rateio?.ativo) return
+    const rateio = despesa.rateio as RateioAtivo
+
+    const participantes = rateio.participantes.map((p) => {
+      if (p.userId !== userId) return p
+      const novoPagamento: Pagamento = {
+        id: crypto.randomUUID(),
+        userId,
+        valor: pagamento.valor,
+        data: pagamento.data,
+        observacao: pagamento.observacao,
+      }
+      const pagamentosAtualizados = [...(p.pagamentos ?? []), novoPagamento]
+      const novoValorPago = pagamentosAtualizados.reduce((s, pg) => s + pg.valor, 0)
+      return { ...p, pagamentos: pagamentosAtualizados, valorPago: novoValorPago }
+    })
+
+    await updateDoc(doc(db, 'despesas', despesaId), {
+      'rateio.participantes': participantes,
+      atualizadoEm: serverTimestamp(),
+    })
+  }
+
+  return { despesasRateadas, loading, responderRateio, pagarParteRateio }
 }

@@ -11,16 +11,9 @@ export type Categoria =
 
 export type MetodoPagamento = 'debito' | 'credito' | 'pix' | 'dinheiro'
 
-export type TipoRateio = 'renda' | 'pessoa'
-
-export interface Rateio {
-  ativo: boolean
-  grupoId?: string
-  tipo?: TipoRateio
-}
-
 export interface Pagamento {
   id: string
+  userId: string
   valor: number
   data: string
   observacao?: string
@@ -99,7 +92,6 @@ export interface CaixinhaForm {
   valorMeta?: number
 }
 
-// ── Amizades ──────────────────────────────────────────────
 export type StatusAmizade = 'pendente' | 'aceita' | 'recusada'
 
 export interface Amizade {
@@ -114,18 +106,20 @@ export interface Amizade {
   criadoEm: string
 }
 
-// ── Rateio ────────────────────────────────────────────────
 export type StatusRateio = 'pendente' | 'aceito' | 'recusado'
+
 export type TipoRateioCalculo = 'pessoa' | 'renda'
 
 export interface ParticipanteRateio {
   userId: string
   nome: string
   email: string
-  renda?: number            // usado no rateio por renda
-  percentual: number        // % calculado
-  valorDevido: number       // R$ devido por parcela
-  valorPago: number         // R$ já pago
+  renda?: number
+  percentual: number
+  valorDevido: number
+  valorDevidoParcela?: number
+  valorPago: number
+  pagamentos: Pagamento[]
   status: StatusRateio
 }
 

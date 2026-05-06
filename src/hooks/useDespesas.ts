@@ -139,31 +139,40 @@ export function useDespesas(userId: string | undefined) {
   }
 
   // Registra pagamento em uma parcela específica
-  const pagarParcela = async (despesaId: string, numeroParcela: number, pagamento: Omit<Pagamento, 'id'>) => {
+  const pagarParcela = async (despesaId: string, numeroParcela: number, pagamento: Omit<Pagamento, 'id' | 'userId'>) => {
     const despesa = despesas.find((d) => d.id === despesaId)
     if (!despesa) return
 
     const listaParcelas = despesa.listaParcelas.map((p) => {
       if (p.numero !== numeroParcela) return p
-      const pagamentos = [...p.pagamentos, { ...pagamento, id: crypto.randomUUID() }]
+      const pagamentos = [...p.pagamentos, { ...pagamento, id: crypto.randomUUID(), userId: userId! }]
       const totalPago = pagamentos.reduce((s, pg) => s + pg.valor, 0)
       return { ...p, pagamentos, pago: totalPago >= p.valor }
     })
 
-    const todasPagas = listaParcelas.every((p) => p.pago)
+    const todasParcelasPagas = listaParcelas.every((p) => p.pago)
+
+    // Para rateios, a despesa só é paga quando todos os participantes aceitos também quitaram
+    const rateioRaw = despesa.rateio as any
+    let participantesQuitados = true
+    if (rateioRaw?.ativo === true) {
+      participantesQuitados = (rateioRaw.participantes ?? [])
+        .filter((p: any) => p.status === 'aceito')
+        .every((p: any) => (p.valorPago ?? 0) >= p.valorDevido)
+    }
 
     await updateDoc(doc(db, 'despesas', despesaId), {
       listaParcelas,
-      pago: todasPagas,
+      pago: todasParcelasPagas && participantesQuitados,
       atualizadoEm: serverTimestamp(),
     })
   }
 
-  const adicionarAdiantamento = async (id: string, adiantamento: Omit<Pagamento, 'id'>) => {
+  const adicionarAdiantamento = async (id: string, adiantamento: Omit<Pagamento, 'id' | 'userId'>) => {
     const despesa = despesas.find((d) => d.id === id)
     if (!despesa) return
     await updateDoc(doc(db, 'despesas', id), {
-      adiantamentos: [...(despesa.adiantamentos || []), { ...adiantamento, id: crypto.randomUUID() }],
+      adiantamentos: [...(despesa.adiantamentos || []), { ...adiantamento, id: crypto.randomUUID(), userId: userId! }],
       atualizadoEm: serverTimestamp(),
     })
   }

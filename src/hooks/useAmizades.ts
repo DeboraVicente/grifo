@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import {
   collection, query, where, onSnapshot, addDoc,
-  updateDoc, doc, serverTimestamp, Timestamp, getDocs, or,
+  updateDoc, doc, serverTimestamp, Timestamp, getDocs,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import type { Amizade, StatusAmizade } from '../types'
+import type { Amizade } from '../types'
 
 export function useAmizades(userId: string | undefined, userEmail: string | undefined, userName: string | undefined) {
   const [amizades, setAmizades] = useState<Amizade[]>([])
@@ -13,7 +13,6 @@ export function useAmizades(userId: string | undefined, userEmail: string | unde
   useEffect(() => {
     if (!userId) { setLoading(false); return }
 
-    // Busca amizades onde o usuário é solicitante ou receptor
     const qSolicitante = query(collection(db, 'amizades'), where('solicitanteId', '==', userId))
     const qReceptor = query(collection(db, 'amizades'), where('receptorId', '==', userId))
 
@@ -57,7 +56,6 @@ export function useAmizades(userId: string | undefined, userEmail: string | unde
     return () => { unsub1(); unsub2() }
   }, [userId])
 
-  // Busca usuário por e-mail para enviar solicitação
   const buscarPorEmail = async (email: string): Promise<{ id: string; nome: string; email: string } | null> => {
     const q = query(collection(db, 'usuarios'), where('email', '==', email.toLowerCase().trim()))
     const snap = await getDocs(q)
@@ -96,7 +94,6 @@ export function useAmizades(userId: string | undefined, userEmail: string | unde
     await updateDoc(doc(db, 'amizades', amizadeId), { status })
   }
 
-  // Retorna só amigos aceitos como lista simples
   const amigos = amizades
     .filter((a) => a.status === 'aceita')
     .map((a) => ({

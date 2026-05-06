@@ -9,14 +9,14 @@ import PagamentoForm from '../components/despesas/PagamentoForm'
 import Modal from '../components/ui/Modal'
 import type { Despesa, DespesaForm as DespesaFormType } from '../types'
 
-type ModalTipo = 'criar' | 'editar' | 'pagar' | 'adiantar' | null
+type ModalTipo = 'criar' | 'editar' | 'pagar' | 'adiantar' | 'pagar-rateio' | null
 type FiltroTipo = 'todas' | 'rateados' | 'pendentes' | 'pagas' | 'rateados-pendente' 
 
 export default function DespesasPage() {
   const { user } = useAuthContext()
   const { despesas, loading, criar, editar, remover, pagarParcela, adicionarAdiantamento } = useDespesas(user?.uid)
   const { amigos } = useAmizades(user?.uid, user?.email ?? '', user?.displayName ?? '')
-  const { despesasRateadas, responderRateio } = useRateioRecebido(user?.uid)
+  const { despesasRateadas, responderRateio, pagarParteRateio } = useRateioRecebido(user?.uid)
 
   const [modal, setModal] = useState<ModalTipo>(null)
   const [selecionada, setSelecionada] = useState<Despesa | null>(null)
@@ -87,6 +87,14 @@ export default function DespesasPage() {
     setSelecionada(d); setParcelaSelecionada(numeroParcela); setModal('pagar')
   }
 
+  const abrirPagarRateio = (d: Despesa) => { setSelecionada(d); setModal('pagar-rateio') }
+
+  const handlePagarParteRateio = async (dados: { valor: number; data: string; observacao: string }) => {
+    if (!selecionada || !user) return
+    await pagarParteRateio(selecionada.id, selecionada, user.uid, dados)
+    fecharModal()
+  }
+
   // 4. Cálculos de Resumo (Cards de cima)
   const agora = new Date()
   const mesAtual = agora.getMonth()
@@ -131,6 +139,16 @@ export default function DespesasPage() {
   const totalPagoParcela = parcelaObj?.pagamentos?.reduce((s, p) => s + p.valor, 0) ?? 0
   const valorRestanteParcela = (parcelaObj?.valor ?? 0) - totalPagoParcela
 
+  const meuParticipanteSelecionado = selecionada?.rateio?.ativo
+    ? (selecionada.rateio as any).participantes?.find((p: any) => p.userId === user?.uid)
+    : null
+  const totalPagoRateioSelecionado = (meuParticipanteSelecionado?.pagamentos ?? [])
+    .reduce((s: number, p: any) => s + p.valor, 0)
+  const valorRestanteRateioSelecionado = Math.max(
+    0,
+    (meuParticipanteSelecionado?.valorDevido ?? 0) - totalPagoRateioSelecionado
+  )
+
   return (
     <div className="despesas-page">
       <div className="resumo-cards">
@@ -140,23 +158,27 @@ export default function DespesasPage() {
           <div className="resumo-indicador">Vence em breve</div>
         </div>
 
+
         <div className="resumo-card secundario">
           <span className="resumo-label">Despesas próprias</span>
           <span className="resumo-valor">{fmt(totalMesProprio)}</span>
-          <div className="resumo-indicador">Próprias</div>
+          <div className="resumo-status">Próprias</div>
         </div>
 
-        <div className="resumo-card secundario">
-          <span className="resumo-label">Despesas rateadas</span>
-          <span className="resumo-valor">{fmt(totalMesRateio)}</span>
-          <div className="resumo-indicador">Rateados</div>
-        </div>
-       
         <div className="resumo-card secundario">
           <span className="resumo-label">Saldo devedor total</span>
           <span className="resumo-valor">{fmt(totalRestanteFuturo)}</span>
           <div className="resumo-status">Compromissos futuros</div>
         </div>
+
+
+        <div className="resumo-card secundario">
+          <span className="resumo-label">Despesas rateadas</span>
+          <span className="resumo-valor">{fmt(totalMesRateio)}</span>
+          <div className="resumo-status">Rateados</div>
+        </div>
+       
+
       </div>
 
       {/* Header com Filtros e Notificação */}
@@ -190,19 +212,27 @@ export default function DespesasPage() {
         </div>
       ) : (
         <div className="despesas-list">
-          {despesasExibidas.map((d) => (
+          {despesasExibidas.map((d) => {
+            const ehRateioPendente = rateiosPendentes.some((r) => r.id === d.id)
+            const ehRateioAceito = rateiosAceitos.some((r) => r.id === d.id)
+            return (
             <DespesaCard
               key={d.id}
               despesa={d}
-              isRateadosPendente={filtro === 'rateados-pendente'}
+              isRateadosPendente={ehRateioPendente}
+              isRateioAceito={ehRateioAceito}
+              meuUserId={user?.uid}
               onEditar={() => { setSelecionada(d); setModal('editar') }}
               onRemover={() => handleRemover(d)}
               onPagarParcela={(num) => abrirPagarParcela(d, num)}
               onAdiantar={() => { setSelecionada(d); setModal('adiantar') }}
               onAceitarRateio={() => responderRateio(d.id, d, user!.uid, 'aceito')}
               onRecusarRateio={() => responderRateio(d.id, d, user!.uid, 'recusado')}
+              onPagarParteRateio={() => abrirPagarRateio(d)}
             />
-          ))}
+            )
+          })}
+
         </div>
       )}
 
@@ -227,6 +257,12 @@ export default function DespesasPage() {
         <Modal titulo="Registrar adiantamento" onFechar={fecharModal}>
           <PagamentoForm tipo="adiantamento" valorRestante={selecionada.valorTotal}
             onSalvar={handleAdiantar} onCancelar={fecharModal} />
+        </Modal>
+      )}
+      {modal === 'pagar-rateio' && selecionada && meuParticipanteSelecionado && (
+        <Modal titulo="Pagar minha parte" onFechar={fecharModal}>
+          <PagamentoForm tipo="pagamento" valorRestante={valorRestanteRateioSelecionado}
+            onSalvar={handlePagarParteRateio} onCancelar={fecharModal} />
         </Modal>
       )}
 
