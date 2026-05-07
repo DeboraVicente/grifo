@@ -32,9 +32,12 @@ export interface Despesa {
   nome: string
   categoria: Categoria
   metodoPagamento: MetodoPagamento
+  tipo?: 'padrao' | 'financiamento'
   parcelas: number
   valorTotal: number
   valorParcela: number
+  saldoDevedor?: number
+  dataCompra?: string
   data: string
   observacoes?: string
   pago: boolean
@@ -50,8 +53,11 @@ export interface DespesaForm {
   nome: string
   categoria: Categoria
   metodoPagamento: MetodoPagamento
+  tipo: 'padrao' | 'financiamento'
   parcelas: number
   valorTotal: number
+  valorParcelaCustom?: number
+  dataCompra: string
   data: string
   observacoes: string
   rateio: Rateio
@@ -68,7 +74,7 @@ export type CaixinhaCategoria =
 
 export interface MovimentoCaixinha {
   id: string
-  tipo: 'entrada' | 'saida'
+  tipo: 'entrada' | 'saida' | 'rendimento'
   valor: number
   data: string
   observacao?: string
@@ -127,6 +133,7 @@ export interface RateioAtivo {
   ativo: true
   tipo: TipoRateioCalculo
   participantes: ParticipanteRateio[]
+  rendaCriador?: number
 }
 
 export interface RateioInativo {
@@ -134,3 +141,17 @@ export interface RateioInativo {
 }
 
 export type Rateio = RateioAtivo | RateioInativo
+
+export type CategoriaReceita = 'salario' | 'freelance' | 'investimento' | 'outros'
+
+export interface Receita {
+  id: string
+  nome: string
+  valor: number
+  data: string
+  categoria: CategoriaReceita
+  recorrente: boolean
+  userId: string
+  criadoEm: string
+  atualizadoEm: string
+}

@@ -51,13 +51,38 @@ export function useRateioRecebido(userId: string | undefined) {
     despesaId: string,
     despesa: Despesa,
     userId: string,
-    resposta: 'aceito' | 'recusado'
+    resposta: 'aceito' | 'recusado',
+    renda?: number
   ) => {
     if (!despesa.rateio?.ativo) return
     const rateio = despesa.rateio as any
-    const participantes = rateio.participantes.map((p: any) =>
-      p.userId === userId ? { ...p, status: resposta } : p
+
+    let participantes = rateio.participantes.map((p: any) =>
+      p.userId === userId ? { ...p, status: resposta, ...(renda && renda > 0 ? { renda } : {}) } : p
     )
+
+    if (resposta === 'aceito' && rateio.tipo === 'renda' && renda && renda > 0) {
+      const rendaCriador: number = rateio.rendaCriador ?? 0
+      const aceitos: any[] = participantes.filter((p: any) => p.status === 'aceito' && (p.renda ?? 0) > 0)
+      const rendaTotal = rendaCriador + aceitos.reduce((s: number, p: any) => s + p.renda, 0)
+
+      if (rendaTotal > 0) {
+        const valorTotal: number = despesa.valorTotal ?? 0
+        const parcelas: number = despesa.parcelas ?? 1
+        participantes = participantes.map((p: any) => {
+          if (p.status !== 'aceito' || !(p.renda > 0)) return p
+          const percentual = (p.renda / rendaTotal) * 100
+          const valorDevido = (percentual / 100) * valorTotal
+          return {
+            ...p,
+            percentual,
+            valorDevido,
+            valorDevidoParcela: valorDevido / parcelas,
+          }
+        })
+      }
+    }
+
     await updateDoc(doc(db, 'despesas', despesaId), {
       'rateio.participantes': participantes,
       atualizadoEm: serverTimestamp(),

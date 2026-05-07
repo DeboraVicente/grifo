@@ -67,14 +67,14 @@ export function useCaixinhas(userId: string | undefined) {
 
   const adicionarMovimento = async (
     id: string,
-    tipo: 'entrada' | 'saida',
+    tipo: 'entrada' | 'saida' | 'rendimento',
     dados: { valor: number; data: string; observacao: string }
   ) => {
     const caixinha = caixinhas.find((c) => c.id === id)
     if (!caixinha) return
-    const novoSaldo = tipo === 'entrada'
-      ? caixinha.valorAtual + dados.valor
-      : Math.max(0, caixinha.valorAtual - dados.valor)
+    const novoSaldo = tipo === 'saida'
+      ? Math.max(0, caixinha.valorAtual - dados.valor)
+      : caixinha.valorAtual + dados.valor
     const movimento: MovimentoCaixinha = {
       id: crypto.randomUUID(),
       tipo,

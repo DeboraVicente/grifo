@@ -51,6 +51,14 @@ service cloud.firestore {
         request.auth.uid == request.resource.data.userId;
     }
 
+    // Receitas
+    match /receitas/{receitaId} {
+      allow read, update, delete: if request.auth != null &&
+        request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.userId;
+    }
+
     // Amizades
     match /amizades/{amizadeId} {
       allow read: if request.auth != null && (

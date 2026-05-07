@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Check, X, CheckCircle2 } from 'lucide-react'
 import { useAuthContext } from '../lib/AuthContext'
 import { useAmizades } from '../hooks/useAmizades'
 import type { Amizade } from '../types'
@@ -96,7 +97,7 @@ export default function ContaPage() {
                     <span className="amigo-nome">{a.nome}</span>
                     <span className="amigo-email">{a.email}</span>
                   </div>
-                  <span className="amigo-badge">✓</span>
+                  <span className="amigo-badge"><CheckCircle2 size={14} /></span>
                 </div>
               ))}
             </div>
@@ -116,8 +117,8 @@ export default function ContaPage() {
                         <span className="amigo-email">quer se conectar</span>
                       </div>
                       <div className="pendente-acoes">
-                        <button className="btn-aceitar" onClick={() => handleResponder(a, 'aceita')}>✓</button>
-                        <button className="btn-recusar" onClick={() => handleResponder(a, 'recusada')}>✕</button>
+                        <button className="btn-aceitar" onClick={() => handleResponder(a, 'aceita')}><Check size={14} /></button>
+                        <button className="btn-recusar" onClick={() => handleResponder(a, 'recusada')}><X size={14} /></button>
                       </div>
                     </div>
                   ))}

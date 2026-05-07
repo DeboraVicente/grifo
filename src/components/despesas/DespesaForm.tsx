@@ -32,8 +32,8 @@ interface Props {
 const hoje = new Date().toISOString().split('T')[0]
 
 const FORM_VAZIO: DespesaFormType = {
-  nome: '', categoria: 'outros', metodoPagamento: 'credito',
-  parcelas: 1, valorTotal: 0, data: hoje, observacoes: '',
+  nome: '', categoria: 'outros', metodoPagamento: 'debito',
+  tipo: 'padrao', parcelas: 1, valorTotal: 0, dataCompra: hoje, data: hoje, observacoes: '',
   rateio: { ativo: false },
 }
 
@@ -43,8 +43,12 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
   const [form, setForm] = useState<DespesaFormType>(
     inicial ? {
       nome: inicial.nome, categoria: inicial.categoria,
-      metodoPagamento: inicial.metodoPagamento, parcelas: inicial.parcelas,
+      metodoPagamento: inicial.metodoPagamento,
+      tipo: inicial.tipo ?? 'padrao',
+      parcelas: inicial.parcelas,
       valorTotal: inicial.valorTotal ?? (inicial as any).valor ?? 0,
+      valorParcelaCustom: inicial.tipo === 'financiamento' ? inicial.valorParcela : undefined,
+      dataCompra: inicial.dataCompra ?? hoje,
       data: inicial.data, observacoes: inicial.observacoes ?? '',
       rateio: inicial.rateio,
     } : FORM_VAZIO
@@ -56,45 +60,31 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
   const [tipoRateio, setTipoRateio] = useState<'pessoa' | 'renda'>(
     (inicial?.rateio?.ativo ? (inicial.rateio as any).tipo : 'pessoa') ?? 'pessoa'
   )
-  const [participantes, setParticipantes] = useState<{ amigoId: string; renda: number }[]>([])
+  const [participantes, setParticipantes] = useState<{ amigoId: string }[]>([])
+  const [rendaCriador, setRendaCriador] = useState(0)
   
   const set = (key: keyof DespesaFormType, value: any) => setForm((f) => ({ ...f, [key]: value }))
 
-  const isCredito = form.metodoPagamento === 'credito'
-  const valorParcela = form.parcelas > 1 && form.valorTotal > 0 ? form.valorTotal / form.parcelas : null
-  
-  const setRenda = (amigoId: string, renda: number) =>
-    setParticipantes((ps) => ps.map((p) => p.amigoId === amigoId ? { ...p, renda } : p))
+  const isFinanciamento = form.tipo === 'financiamento'
+  const valorParcela = isFinanciamento
+    ? (form.valorParcelaCustom ?? null)
+    : (form.parcelas > 1 && form.valorTotal > 0 ? form.valorTotal / form.parcelas : null)
 
-  // Calcula preview do rateio — sempre sobre valorTotal (não parcela)
+  // Calcula preview do rateio — apenas para tipo 'pessoa'
   const previewRateio = () => {
-    const valorBase = form.valorTotal   // rateio é sobre o total
+    const valorBase = form.valorTotal
     if (!valorBase || participantes.length === 0) return []
-    const total = participantes.length + 1 // +1 = o próprio usuário
-
-    if (tipoRateio === 'pessoa') {
-      const parte = valorBase / total
-      const parteParc = parte / form.parcelas  // exibição mensal se parcelado
-      return [
-        { nome: 'Você', valor: parteParc, valorTotal: parte, pct: (100 / total) },
-        ...participantes.map((p) => {
-          const amigo = amigos.find((a) => a.id === p.amigoId)
-          return { nome: amigo?.nome ?? '?', valor: parteParc, valorTotal: parte, pct: (100 / total) }
-        }),
-      ]
-    } else {
-      const rendas = participantes.map((p) => p.renda)
-      const rendaDefault = rendas.length > 0 ? Math.max(...rendas, 1) : 1
-      const rendaTotal = rendaDefault + rendas.reduce((s, r) => s + r, 0)
-      return [
-        { nome: 'Você', valor: (rendaDefault / rendaTotal) * valorBase / form.parcelas, valorTotal: (rendaDefault / rendaTotal) * valorBase, pct: (rendaDefault / rendaTotal) * 100 },
-        ...participantes.map((p) => {
-          const amigo = amigos.find((a) => a.id === p.amigoId)
-          const pct = rendaTotal > 0 ? (p.renda / rendaTotal) * 100 : 0
-          return { nome: amigo?.nome ?? '?', valor: (p.renda / rendaTotal) * valorBase / form.parcelas, valorTotal: (p.renda / rendaTotal) * valorBase, pct }
-        }),
-      ]
-    }
+    if (tipoRateio === 'renda') return []
+    const total = participantes.length + 1
+    const parte = valorBase / total
+    const parteParc = parte / form.parcelas
+    return [
+      { nome: 'Você', valor: parteParc, valorTotal: parte, pct: (100 / total) },
+      ...participantes.map((p) => {
+        const amigo = amigos.find((a) => a.id === p.amigoId)
+        return { nome: amigo?.nome ?? '?', valor: parteParc, valorTotal: parte, pct: (100 / total) }
+      }),
+    ]
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,26 +94,43 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
       let rateio: any
 
       if (rateioAtivo && participantes.length > 0) {
-        // preview[0] = Você, preview[1..n] = participantes na mesma ordem
-        const prev = previewRateio()
-
-        const participantesRateio = participantes.map((p, idx) => {
-          const amigo = amigos.find((a) => a.id === p.amigoId)!
-          const previewItem = prev[idx + 1] // +1 pula o "Você"
-          return {
-            userId: p.amigoId,
-            nome: amigo.nome,
-            email: amigo.email,
-            renda: p.renda,
-            percentual: previewItem?.pct ?? 0,
-            valorDevido: (previewItem as any)?.valorTotal ?? 0,
-            valorDevidoParcela: previewItem?.valor ?? 0,
-            valorPago: 0,
-            status: 'pendente',
-          }
-        })
-
-        rateio = { ativo: true, tipo: tipoRateio, participantes: participantesRateio }
+        if (tipoRateio === 'renda') {
+          const participantesRateio = participantes.map((p) => {
+            const amigo = amigos.find((a) => a.id === p.amigoId)!
+            return {
+              userId: p.amigoId,
+              nome: amigo.nome,
+              email: amigo.email,
+              renda: 0,
+              percentual: 0,
+              valorDevido: 0,
+              valorDevidoParcela: 0,
+              valorPago: 0,
+              pagamentos: [],
+              status: 'pendente',
+            }
+          })
+          rateio = { ativo: true, tipo: 'renda', rendaCriador, participantes: participantesRateio }
+        } else {
+          const prev = previewRateio()
+          const participantesRateio = participantes.map((p, idx) => {
+            const amigo = amigos.find((a) => a.id === p.amigoId)!
+            const previewItem = prev[idx + 1]
+            return {
+              userId: p.amigoId,
+              nome: amigo.nome,
+              email: amigo.email,
+              renda: 0,
+              percentual: previewItem?.pct ?? 0,
+              valorDevido: (previewItem as any)?.valorTotal ?? 0,
+              valorDevidoParcela: previewItem?.valor ?? 0,
+              valorPago: 0,
+              pagamentos: [],
+              status: 'pendente',
+            }
+          })
+          rateio = { ativo: true, tipo: tipoRateio, participantes: participantesRateio }
+        }
       } else {
         rateio = { ativo: false }
       }
@@ -140,51 +147,91 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
 
   return (
     <form onSubmit={handleSubmit} className="despesa-form">
+      {/* Toggle tipo: Despesa / Financiamento */}
+      <div className="tipo-tabs">
+        <button type="button"
+          className={`tipo-tab-btn ${!isFinanciamento ? 'active' : ''}`}
+          onClick={() => { set('tipo', 'padrao'); set('valorParcelaCustom', undefined) }}>
+          Despesa
+        </button>
+        <button type="button"
+          className={`tipo-tab-btn ${isFinanciamento ? 'active' : ''}`}
+          onClick={() => set('tipo', 'financiamento')}>
+          Financiamento
+        </button>
+      </div>
+
       <div className="form-grid">
         <div className="field full">
           <label>Nome da despesa</label>
-          <input type="text" placeholder="Ex: Conta de luz" value={form.nome}
-            onChange={(e) => set('nome', e.target.value)} required />
+          <input type="text"
+            placeholder={isFinanciamento ? 'Ex: Financiamento imóvel' : 'Ex: Conta de luz'}
+            value={form.nome} onChange={(e) => set('nome', e.target.value)} required />
         </div>
 
         <div className="field">
-          <label>Data {isCredito && form.parcelas > 1 ? 'da 1ª parcela' : ''}</label>
+          <label>Data da compra</label>
+          <input type="date" value={form.dataCompra} onChange={(e) => set('dataCompra', e.target.value)} required />
+        </div>
+
+        <div className="field">
+          <label>{isFinanciamento ? 'Próximo vencimento' : `Data do vencimento${form.parcelas > 1 ? ' da 1ª parcela' : ''}`}</label>
           <input type="date" value={form.data} onChange={(e) => set('data', e.target.value)} required />
         </div>
 
         <div className="field">
-          <label>Valor total (R$)</label>
+          <label>{isFinanciamento ? 'Saldo devedor atual (R$)' : 'Valor total (R$)'}</label>
           <input type="number" min="0" step="0.01" placeholder="0,00"
             value={form.valorTotal || ''}
             onChange={(e) => set('valorTotal', parseFloat(e.target.value) || 0)} required />
         </div>
 
-        <div className="field">
-          <label>Método de pagamento</label>
-          <select value={form.metodoPagamento} onChange={(e) => {
-            set('metodoPagamento', e.target.value)
-            if (e.target.value !== 'credito') set('parcelas', 1)
-          }}>
-            {METODOS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
-        </div>
-
-        {isCredito && (
+        {isFinanciamento ? (
           <div className="field">
-            <label>Parcelas</label>
-            <select value={form.parcelas} onChange={(e) => set('parcelas', parseInt(e.target.value))}>
-              {Array.from({ length: 24 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>{n}x {n === 1 ? '(à vista)' : ''}</option>
-              ))}
+            <label>Parcela mensal (R$)</label>
+            <input type="number" min="0" step="0.01" placeholder="0,00"
+              value={form.valorParcelaCustom || ''}
+              onChange={(e) => set('valorParcelaCustom', parseFloat(e.target.value) || undefined)}
+              required />
+          </div>
+        ) : (
+          <div className="field">
+            <label>Método de pagamento</label>
+            <select value={form.metodoPagamento} onChange={(e) => set('metodoPagamento', e.target.value)}>
+              {METODOS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
           </div>
         )}
+
+        {isFinanciamento && (
+          <div className="field">
+            <label>Método de pagamento</label>
+            <select value={form.metodoPagamento} onChange={(e) => set('metodoPagamento', e.target.value)}>
+              {METODOS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+        )}
+
+        <div className="field">
+          <label>{isFinanciamento ? 'Meses restantes' : 'Parcelas'}</label>
+          <input
+            type="number"
+            min="1"
+            max="420"
+            value={form.parcelas}
+            onChange={(e) => set('parcelas', Math.max(1, Math.min(420, parseInt(e.target.value) || 1)))}
+          />
+        </div>
 
         {valorParcela && (
           <div className="field full">
             <div className="parcela-preview">
               <span>📅</span>
-              <span>{form.parcelas}x de <strong>{fmt(valorParcela)}</strong> — total {fmt(form.valorTotal)}</span>
+              {isFinanciamento ? (
+                <span>{form.parcelas}x de <strong>{fmt(valorParcela)}/mês</strong> — saldo devedor <strong>{fmt(form.valorTotal)}</strong></span>
+              ) : (
+                <span>{form.parcelas}x de <strong>{fmt(valorParcela)}</strong> — total {fmt(form.valorTotal)}</span>
+              )}
             </div>
           </div>
         )}
@@ -193,10 +240,7 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
           <label>Categoria</label>
           <select
             value={form.categoria}
-            onChange={(e) => {
-              set('categoria', e.target.value)
-              if (e.target.value !== 'credito') set('parcelas', 1)
-            }}
+            onChange={(e) => set('categoria', e.target.value)}
           >
             {CATEGORIAS.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
@@ -255,7 +299,6 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
                     <span className="amigos-label">Selecione quem participa</span>
                     {amigos.map((amigo) => {
                       const selecionado = participantes.some((p) => p.amigoId === amigo.id)
-                      const participante = participantes.find((p) => p.amigoId === amigo.id)
                       return (
                         <div key={amigo.id} className={`amigo-toggle ${selecionado ? 'selecionado' : ''}`}>
                           <button type="button" className="amigo-toggle-btn"
@@ -263,13 +306,13 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
                               if (selecionado) {
                                 setParticipantes((ps) => ps.filter((p) => p.amigoId !== amigo.id))
                               } else {
-                                setParticipantes((ps) => [...ps, { amigoId: amigo.id, renda: 0 }])
+                                setParticipantes((ps) => [...ps, { amigoId: amigo.id }])
                               }
                             }}>
                             <span className="amigo-avatar-sm">{amigo.nome.charAt(0).toUpperCase()}</span>
                             <div className="amigo-info-sm">
                               <span className="amigo-nome-sm">{amigo.nome}</span>
-                              {selecionado && preview.length > 0 && form.valorTotal > 0 && (() => {
+                              {selecionado && tipoRateio === 'pessoa' && preview.length > 0 && form.valorTotal > 0 && (() => {
                                 const idx = participantes.findIndex(p => p.amigoId === amigo.id)
                                 const prev = preview[idx + 1]
                                 return prev ? (
@@ -283,21 +326,28 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
                               {selecionado ? '✓' : ''}
                             </div>
                           </button>
-                          {selecionado && tipoRateio === 'renda' && (
-                            <div className="renda-field">
-                              <span className="renda-label">Renda mensal de {amigo.nome.split(' ')[0]}</span>
-                              <input type="number" min="0" step="100" placeholder="R$ 0,00"
-                                className="participante-renda"
-                                value={participante?.renda || ''}
-                                onChange={(e) => setRenda(amigo.id, parseFloat(e.target.value) || 0)} />
-                            </div>
-                          )}
                         </div>
                       )
                     })}
                   </div>
 
-                  {/* Preview resumido */}
+                  {/* Campo de renda do criador (apenas rateio por renda) */}
+                  {tipoRateio === 'renda' && (
+                    <div className="renda-criador-field">
+                      <label className="renda-label">Minha renda mensal (R$)</label>
+                      <input type="number" min="0" step="100" placeholder="0,00"
+                        className="participante-renda"
+                        value={rendaCriador || ''}
+                        onChange={(e) => setRendaCriador(parseFloat(e.target.value) || 0)} />
+                      {participantes.length > 0 && (
+                        <span className="renda-aviso">
+                          A divisão proporcional será calculada quando cada participante confirmar sua renda
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Preview resumido (apenas para tipo igualitário) */}
                   {preview.length > 0 && form.valorTotal > 0 && (
                     <div className="rateio-preview">
                       <div className="preview-header">
@@ -341,11 +391,38 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
       </div>
 
       <style>{`
-        .despesa-form { 
-          display: flex; 
-          flex-direction: column; 
-          gap: 1.5rem; 
+        .despesa-form {
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
           background: #FFFFFF;
+        }
+
+        /* Toggle Despesa / Financiamento */
+        .tipo-tabs {
+          display: flex;
+          gap: 0.5rem;
+          background: #F1F2F6;
+          padding: 0.3rem;
+          border-radius: 12px;
+        }
+        .tipo-tab-btn {
+          flex: 1;
+          padding: 0.6rem;
+          border: none;
+          border-radius: 9px;
+          font-size: 0.82rem;
+          font-weight: 700;
+          cursor: pointer;
+          background: transparent;
+          color: #7F8C8D;
+          transition: all 0.2s;
+          font-family: inherit;
+        }
+        .tipo-tab-btn.active {
+          background: #FFFFFF;
+          color: #C8A45A;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         }
 
         .form-grid { 
@@ -566,21 +643,28 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
     border-color: #C8A45A;
   }
 
-  /* Campo de Renda quando selecionado */
-  .renda-field {
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px dashed #EDF0F2;
+  /* Campo de renda do criador */
+  .renda-criador-field {
+    background: #FFFDF7;
+    border: 1px solid rgba(200,164,90,0.2);
+    border-radius: 12px;
+    padding: 1rem;
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
   }
-  .renda-label { color: #95A5A6; font-size: 0.7rem; font-weight: 600; }
+  .renda-label { color: #95A5A6; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
   .participante-renda {
     background: #F8F9FA !important;
-    padding: 0.6rem !important;
-    font-size: 0.85rem !important;
+    border: 1px solid #F1F2F6 !important;
+    border-radius: 10px !important;
+    padding: 0.7rem 0.9rem !important;
+    font-size: 0.9rem !important;
+    outline: none;
+    font-family: inherit;
   }
+  .participante-renda:focus { border-color: #C8A45A !important; background: #fff !important; }
+  .renda-aviso { color: #C8A45A; font-size: 0.72rem; font-style: italic; line-height: 1.4; }
 
   /* Preview de Divisão estilo Progress Bar */
   .rateio-preview {

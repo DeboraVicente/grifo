@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PiggyBank } from 'lucide-react'
 import { useCaixinhas } from '../hooks/useCaixinhas'
 import { useAuthContext } from '../lib/AuthContext'
 import CaixinhaCard from '../components/caixinhas/CaixinhaCard'
@@ -7,7 +8,7 @@ import PagamentoForm from '../components/despesas/PagamentoForm'
 import Modal from '../components/ui/Modal'
 import type { Caixinha, CaixinhaForm as CaixinhaFormType } from '../types'
 
-type ModalTipo = 'criar' | 'editar' | 'depositar' | 'retirar' | null
+type ModalTipo = 'criar' | 'editar' | 'depositar' | 'retirar' | 'rendimento' | null
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
@@ -32,7 +33,7 @@ export default function CaixinhasPage() {
   }
   const handleMovimento = async (dados: { valor: number; data: string; observacao: string }) => {
     if (!selecionada || !modal) return
-    const tipo = modal === 'depositar' ? 'entrada' : 'saida'
+    const tipo = modal === 'depositar' ? 'entrada' : modal === 'rendimento' ? 'rendimento' : 'saida'
     await adicionarMovimento(selecionada.id, tipo, dados)
     fecharModal()
   }
@@ -59,7 +60,7 @@ export default function CaixinhasPage() {
         <div className="estado-vazio">Carregando...</div>
       ) : caixinhas.length === 0 ? (
         <div className="estado-vazio">
-          <span>🪣</span>
+          <PiggyBank size={48} color="#B2BEC3" />
           <p>Nenhuma caixinha criada</p>
           <button className="btn-criar-vazio" onClick={() => setModal('criar')}>Criar primeira caixinha</button>
         </div>
@@ -73,6 +74,7 @@ export default function CaixinhasPage() {
               onRemover={() => handleRemover(c)}
               onDepositar={() => { setSelecionada(c); setModal('depositar') }}
               onRetirar={() => { setSelecionada(c); setModal('retirar') }}
+              onRendimento={() => { setSelecionada(c); setModal('rendimento') }}
             />
           ))}
         </div>
@@ -97,6 +99,13 @@ export default function CaixinhasPage() {
       {modal === 'retirar' && selecionada && (
         <Modal titulo={`Retirar de "${selecionada.nome}"`} onFechar={fecharModal}>
           <PagamentoForm tipo="adiantamento" valorRestante={selecionada.valorAtual}
+            max={selecionada.valorAtual}
+            onSalvar={handleMovimento} onCancelar={fecharModal} />
+        </Modal>
+      )}
+      {modal === 'rendimento' && selecionada && (
+        <Modal titulo={`Rendimento em "${selecionada.nome}"`} onFechar={fecharModal}>
+          <PagamentoForm tipo="adiantamento" valorRestante={0}
             onSalvar={handleMovimento} onCancelar={fecharModal} />
         </Modal>
       )}

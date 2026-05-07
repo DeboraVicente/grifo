@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useDespesas } from '../hooks/useDespesas'
 import { useAmizades } from '../hooks/useAmizades'
 import { useRateioRecebido } from '../hooks/useRateio'
@@ -22,6 +22,10 @@ export default function DespesasPage() {
   const [selecionada, setSelecionada] = useState<Despesa | null>(null)
   const [parcelaSelecionada, setParcelaSelecionada] = useState<number>(1)
   const [filtro, setFiltro] = useState<FiltroTipo>('todas')
+  const [pagina, setPagina] = useState(0)
+  const ITENS_POR_PAGINA = 8
+
+  useEffect(() => { setPagina(0) }, [filtro])
 
   const fecharModal = () => { setModal(null); setSelecionada(null) }
 
@@ -78,9 +82,9 @@ export default function DespesasPage() {
     await pagarParcela(selecionada.id, parcelaSelecionada, dados)
     fecharModal()
   }
-  const handleAdiantar = async (dados: { valor: number; data: string; observacao: string }) => {
+  const handleAdiantar = async (dados: { valor: number; data: string; observacao: string; parcelasQuitadas?: number }) => {
     if (!selecionada) return
-    await adicionarAdiantamento(selecionada.id, dados)
+    await adicionarAdiantamento(selecionada.id, dados, dados.parcelasQuitadas)
     fecharModal()
   }
   const abrirPagarParcela = (d: Despesa, numeroParcela: number) => {
@@ -211,29 +215,41 @@ export default function DespesasPage() {
           )}
         </div>
       ) : (
-        <div className="despesas-list">
-          {despesasExibidas.map((d) => {
-            const ehRateioPendente = rateiosPendentes.some((r) => r.id === d.id)
-            const ehRateioAceito = rateiosAceitos.some((r) => r.id === d.id)
-            return (
-            <DespesaCard
-              key={d.id}
-              despesa={d}
-              isRateadosPendente={ehRateioPendente}
-              isRateioAceito={ehRateioAceito}
-              meuUserId={user?.uid}
-              onEditar={() => { setSelecionada(d); setModal('editar') }}
-              onRemover={() => handleRemover(d)}
-              onPagarParcela={(num) => abrirPagarParcela(d, num)}
-              onAdiantar={() => { setSelecionada(d); setModal('adiantar') }}
-              onAceitarRateio={() => responderRateio(d.id, d, user!.uid, 'aceito')}
-              onRecusarRateio={() => responderRateio(d.id, d, user!.uid, 'recusado')}
-              onPagarParteRateio={() => abrirPagarRateio(d)}
-            />
-            )
-          })}
+        <>
+          <div className="despesas-list">
+            {despesasExibidas.slice(pagina * ITENS_POR_PAGINA, (pagina + 1) * ITENS_POR_PAGINA).map((d) => {
+              const ehRateioPendente = rateiosPendentes.some((r) => r.id === d.id)
+              const ehRateioAceito = rateiosAceitos.some((r) => r.id === d.id)
+              return (
+                <DespesaCard
+                  key={d.id}
+                  despesa={d}
+                  isRateadosPendente={ehRateioPendente}
+                  isRateioAceito={ehRateioAceito}
+                  meuUserId={user?.uid}
+                  onEditar={() => { setSelecionada(d); setModal('editar') }}
+                  onRemover={() => handleRemover(d)}
+                  onPagarParcela={(num) => abrirPagarParcela(d, num)}
+                  onAdiantar={() => { setSelecionada(d); setModal('adiantar') }}
+                  onAceitarRateio={(renda) => responderRateio(d.id, d, user!.uid, 'aceito', renda)}
+                  onRecusarRateio={() => responderRateio(d.id, d, user!.uid, 'recusado')}
+                  onPagarParteRateio={() => abrirPagarRateio(d)}
+                />
+              )
+            })}
+          </div>
 
-        </div>
+          {despesasExibidas.length > ITENS_POR_PAGINA && (
+            <div className="paginacao">
+              <button className="pag-btn" disabled={pagina === 0} onClick={() => setPagina(p => p - 1)}>‹</button>
+              <span className="pag-info">
+                {pagina + 1} / {Math.ceil(despesasExibidas.length / ITENS_POR_PAGINA)}
+                <span className="pag-total"> · {despesasExibidas.length} despesas</span>
+              </span>
+              <button className="pag-btn" disabled={(pagina + 1) * ITENS_POR_PAGINA >= despesasExibidas.length} onClick={() => setPagina(p => p + 1)}>›</button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Modais */}
@@ -254,9 +270,17 @@ export default function DespesasPage() {
         </Modal>
       )}
       {modal === 'adiantar' && selecionada && (
-        <Modal titulo="Registrar adiantamento" onFechar={fecharModal}>
-          <PagamentoForm tipo="adiantamento" valorRestante={selecionada.valorTotal}
-            onSalvar={handleAdiantar} onCancelar={fecharModal} />
+        <Modal
+          titulo={selecionada.tipo === 'financiamento' ? 'Registrar amortização' : 'Registrar adiantamento'}
+          onFechar={fecharModal}
+        >
+          <PagamentoForm
+            tipo="adiantamento"
+            valorRestante={selecionada.tipo === 'financiamento' ? (selecionada.saldoDevedor ?? selecionada.valorTotal) : selecionada.valorTotal}
+            isAmortizacao={selecionada.tipo === 'financiamento'}
+            onSalvar={handleAdiantar}
+            onCancelar={fecharModal}
+          />
         </Modal>
       )}
       {modal === 'pagar-rateio' && selecionada && meuParticipanteSelecionado && (
@@ -304,6 +328,13 @@ export default function DespesasPage() {
         }
 
         .despesas-list { display: flex; flex-direction: column; gap: 0.75rem; }
+
+        .paginacao { display: flex; align-items: center; justify-content: center; gap: 1rem; padding: 0.5rem 0; }
+        .pag-btn { background: #F8F9FA; border: 1px solid #E0E0E0; border-radius: 8px; width: 36px; height: 36px; font-size: 1.2rem; cursor: pointer; color: #636e72; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+        .pag-btn:hover:not(:disabled) { background: #C8A45A; color: white; border-color: #C8A45A; }
+        .pag-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .pag-info { font-size: 0.82rem; font-weight: 700; color: #2D3436; }
+        .pag-total { font-weight: 400; color: #95A5A6; }
         .estado-vazio { text-align: center; padding: 4rem 1rem; color: #A4B0BE; }
         .estado-vazio span { font-size: 3rem; display: block; margin-bottom: 1rem; }
         .btn-criar-vazio { background: white; border: 1px solid #E0E0E0; color: #777; border-radius: 12px; padding: 0.8rem 1.5rem; font-size: 0.85rem; cursor: pointer; margin-top: 1rem; }

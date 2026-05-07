@@ -1,10 +1,7 @@
 import { useState } from 'react'
+import { Pencil, Trash2, ArrowUp, ArrowDown, CheckCircle2, TrendingUp, Sparkles } from 'lucide-react'
 import type { Caixinha } from '../../types'
-
-const CATEGORIA_EMOJI: Record<string, string> = {
-  emergencia: '🆘', viagem: '✈️', educacao: '📚', saude: '❤️',
-  reforma: '🔧', eletronicos: '📱', outros: '📦',
-}
+import CategoryIcon from '../ui/CategoryIcon'
 
 interface Props {
   caixinha: Caixinha
@@ -12,11 +9,12 @@ interface Props {
   onRemover: () => void
   onDepositar: () => void
   onRetirar: () => void
+  onRendimento: () => void
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDepositar, onRetirar }: Props) {
+export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDepositar, onRetirar, onRendimento }: Props) {
   const [expandido, setExpandido] = useState(false)
 
   const progresso = caixinha.valorMeta
@@ -30,7 +28,7 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
   return (
     <div className="caixinha-card">
       <div className="card-main" onClick={() => setExpandido((v) => !v)}>
-        <div className="card-icon">{CATEGORIA_EMOJI[caixinha.categoria] ?? '📦'}</div>
+        <div className="card-icon"><CategoryIcon categoria={caixinha.categoria} size={22} color="#636e72" /></div>
         <div className="card-info">
           <div className="card-nome">{caixinha.nome}</div>
           {caixinha.valorMeta && (
@@ -43,7 +41,7 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
         <div className="card-saldo">
           <span>{fmt(caixinha.valorAtual)}</span>
           {caixinha.valorMeta && caixinha.valorAtual >= caixinha.valorMeta && (
-            <span className="badge-meta">✓ meta</span>
+            <span className="badge-meta"><CheckCircle2 size={10} /> meta</span>
           )}
         </div>
       </div>
@@ -59,8 +57,9 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
         <div className="card-detalhes">
           {/* Ações rápidas */}
           <div className="acoes-rapidas">
-            <button className="btn-depositar" onClick={onDepositar}>⬆ Depositar</button>
-            <button className="btn-retirar" onClick={onRetirar} disabled={caixinha.valorAtual <= 0}>⬇ Retirar</button>
+            <button className="btn-depositar" onClick={onDepositar}><ArrowUp size={14} /> Depositar</button>
+            <button className="btn-retirar" onClick={onRetirar} disabled={caixinha.valorAtual <= 0}><ArrowDown size={14} /> Retirar</button>
+            <button className="btn-rendimento" onClick={onRendimento}><TrendingUp size={14} /> Rendimento</button>
           </div>
 
           {/* Histórico */}
@@ -69,20 +68,22 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
               <span className="historico-titulo">Últimos movimentos</span>
               {ultimosMovimentos.map((m) => (
                 <div key={m.id} className="movimento-row">
-                  <span className={`mov-tipo ${m.tipo}`}>{m.tipo === 'entrada' ? '⬆' : '⬇'}</span>
+                  <span className={`mov-tipo ${m.tipo}`}>
+                    {m.tipo === 'entrada' ? <ArrowUp size={13} /> : m.tipo === 'rendimento' ? <Sparkles size={13} /> : <ArrowDown size={13} />}
+                  </span>
                   <span className="mov-data">
                     {new Date(m.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
                   </span>
                   {m.observacao && <span className="mov-obs">{m.observacao}</span>}
-                  <span className={`mov-valor ${m.tipo}`}>{m.tipo === 'entrada' ? '+' : '-'}{fmt(m.valor)}</span>
+                  <span className={`mov-valor ${m.tipo}`}>{m.tipo === 'saida' ? '-' : '+'}{fmt(m.valor)}</span>
                 </div>
               ))}
             </div>
           )}
 
           <div className="card-acoes">
-            <button className="acao-btn" onClick={onEditar}>✏️ Editar</button>
-            <button className="acao-btn acao-remover" onClick={onRemover}>🗑</button>
+            <button className="acao-btn" onClick={onEditar}><Pencil size={14} /> Editar</button>
+            <button className="acao-btn acao-remover" onClick={onRemover}><Trash2 size={14} /></button>
           </div>
         </div>
       )}
@@ -111,16 +112,15 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
         cursor: pointer; 
       }
 
-      .card-icon { 
-        font-size: 1.2rem; 
-        width: 44px; 
-        height: 44px; 
+      .card-icon {
+        width: 44px;
+        height: 44px;
         background: #F8F9FA;
         border-radius: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
-        flex-shrink: 0; 
+        flex-shrink: 0;
       }
 
       .card-info { flex: 1; min-width: 0; }
@@ -157,14 +157,17 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
         font-variant-numeric: tabular-nums; 
       }
 
-      .badge-meta { 
-        font-size: 0.65rem !important; 
+      .badge-meta {
+        font-size: 0.65rem !important;
         font-weight: 700;
-        color: #2ECC71 !important; 
-        background: #E8F5E9; 
-        border-radius: 6px; 
-        padding: 2px 6px; 
+        color: #2ECC71 !important;
+        background: #E8F5E9;
+        border-radius: 6px;
+        padding: 2px 6px;
         text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
       }
 
       /* Barra de progresso integrada */
@@ -186,31 +189,39 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
       }
 
       .acoes-rapidas { display: flex; gap: 0.75rem; }
-      
+
       .btn-depositar, .btn-retirar {
-        flex: 1; 
-        padding: 0.75rem; 
-        border-radius: 12px; 
+        flex: 1;
+        display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+        padding: 0.75rem;
+        border-radius: 12px;
         font-size: 0.85rem;
-        cursor: pointer; 
-        transition: all 0.2s; 
-        font-family: inherit; 
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: inherit;
         font-weight: 700;
         border: none;
       }
 
-      .btn-depositar { 
-        background: #E8F5E9; 
-        color: #2ECC71; 
+      .btn-depositar {
+        background: #E8F5E9;
+        color: #2ECC71;
       }
       .btn-depositar:hover { background: #2ECC71; color: white; }
 
-      .btn-retirar { 
-        background: #FFF5F5; 
-        color: #E74C3C; 
+      .btn-retirar {
+        background: #FFF5F5;
+        color: #E74C3C;
       }
       .btn-retirar:hover:not(:disabled) { background: #E74C3C; color: white; }
       .btn-retirar:disabled { opacity: 0.4; cursor: not-allowed; }
+
+      .btn-rendimento {
+        background: #FFFDF7;
+        color: #C8A45A;
+        border: 1px solid rgba(200,164,90,0.25);
+      }
+      .btn-rendimento:hover { background: #C8A45A; color: white; }
 
       .historico { display: flex; flex-direction: column; gap: 0.5rem; }
       
@@ -241,23 +252,26 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
         font-style: italic; 
       }
 
+      .mov-tipo.rendimento { color: #C8A45A; }
       .mov-valor { font-weight: 600; font-variant-numeric: tabular-nums; }
       .mov-valor.entrada { color: #2ECC71; }
       .mov-valor.saida { color: #E74C3C; }
+      .mov-valor.rendimento { color: #C8A45A; }
 
       .card-acoes { display: flex; gap: 0.5rem; }
-      
-      .acao-btn { 
+
+      .acao-btn {
         flex: 1;
-        background: white; 
-        border: 1px solid #E0E0E0; 
-        color: #636E72; 
-        border-radius: 10px; 
-        padding: 0.6rem; 
-        font-size: 0.75rem; 
+        display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+        background: white;
+        border: 1px solid #E0E0E0;
+        color: #636E72;
+        border-radius: 10px;
+        padding: 0.6rem;
+        font-size: 0.75rem;
         font-weight: 600;
-        cursor: pointer; 
-        transition: all 0.2s; 
+        cursor: pointer;
+        transition: all 0.2s;
       }
       
       .acao-btn:hover { background: #F8F9FA; border-color: #B2BEC3; }

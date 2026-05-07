@@ -1,11 +1,20 @@
 import { useState, useRef, useEffect } from 'react'
+import { Receipt, PiggyBank, BarChart2 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useAuthContext } from './lib/AuthContext'
 import AuthPage from './pages/AuthPage'
 import DespesasPage from './pages/DespesasPage'
 import CaixinhasPage from './pages/CaixinhasPage'
 import ContaPage from './pages/ContaPage'
+import RelatoriosPage from './pages/RelatoriosPage'
 
-type Tab = 'despesas' | 'caixinhas' | 'conta' | 'relatorios' 
+type Tab = 'despesas' | 'caixinhas' | 'conta' | 'relatorios'
+
+const NAV_ITEMS: { id: Tab; label: string; Icon: LucideIcon }[] = [
+  { id: 'despesas', label: 'Despesas', Icon: Receipt },
+  { id: 'caixinhas', label: 'Caixinhas', Icon: PiggyBank },
+  { id: 'relatorios', label: 'Relatórios', Icon: BarChart2 },
+]
 
 export default function App() {
   const { user, loading, signOut } = useAuthContext()
@@ -76,13 +85,14 @@ export default function App() {
         {/* Menu Lateral visível apenas no Desktop */}
         <aside className="sidebar-desktop">
           <nav className="side-nav">
-            {['despesas', 'caixinhas', 'relatorios'].map((t) => (
-              <button 
-                key={t} 
-                className={tab === t ? 'active' : ''} 
-                onClick={() => setTab(t as Tab)}
+            {NAV_ITEMS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                className={tab === id ? 'active' : ''}
+                onClick={() => setTab(id)}
               >
-                {t.charAt(0).toUpperCase() + t.slice(1)}
+                <Icon size={17} />
+                <span>{label}</span>
               </button>
             ))}
           </nav>
@@ -93,16 +103,17 @@ export default function App() {
             {tab === 'despesas' && <DespesasPage />}
             {tab === 'caixinhas' && <CaixinhasPage />}
             {tab === 'conta' && <ContaPage />}
-            {tab === 'relatorios' && <div className="em-breve">Em breve</div>}
+            {tab === 'relatorios' && <RelatoriosPage />}
           </div>
         </main>
       </div>
 
       {/* Nav Mobile: Invisível no Desktop */}
       <nav className="app-nav-mobile">
-        {['despesas', 'caixinhas', 'relatorios'].map((t) => (
-          <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t as Tab)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+        {NAV_ITEMS.map(({ id, label, Icon }) => (
+          <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>
+            <Icon size={20} />
+            <span>{label}</span>
           </button>
         ))}
       </nav>
@@ -130,9 +141,10 @@ export default function App() {
         /* Sidebar Desktop: Oculta por padrão (mobile) */
         .sidebar-desktop { width: 240px; padding: 2rem 1rem; display: none; }
         .side-nav { display: flex; flex-direction: column; gap: 0.5rem; }
-        .side-nav button { 
-          text-align: left; padding: 0.8rem 1rem; border: none; background: none; 
-          border-radius: 12px; font-weight: 600; color: #95A5A6; cursor: pointer; 
+        .side-nav button {
+          display: flex; align-items: center; gap: 0.65rem;
+          text-align: left; padding: 0.8rem 1rem; border: none; background: none;
+          border-radius: 12px; font-weight: 600; color: #95A5A6; cursor: pointer; width: 100%;
         }
         .side-nav button.active { background: #FFFDF7; color: #C8A45A; }
         /* Dropdown Perfil */
@@ -153,7 +165,7 @@ export default function App() {
           backdrop-filter: blur(10px); border-radius: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.1);
           display: flex; padding: 0.5rem; z-index: 200;
         }
-        .app-nav-mobile button { flex: 1; padding: 0.7rem; border: none; background: none; color: #95A5A6; font-size: 0.75rem; font-weight: 700; }
+        .app-nav-mobile button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.6rem 0; border: none; background: none; color: #95A5A6; font-size: 0.65rem; font-weight: 700; cursor: pointer; }
         .app-nav-mobile button.active { color: #C8A45A; }
 
         /* Dropdown Perfil */
