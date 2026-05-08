@@ -11,6 +11,29 @@ export type Categoria =
 
 export type MetodoPagamento = 'debito' | 'credito' | 'pix' | 'dinheiro'
 
+export type BandeiraCartao = 'visa' | 'mastercard' | 'elo' | 'amex' | 'hipercard' | 'outros'
+
+export interface CartaoCredito {
+  id: string
+  nome: string
+  banco: string
+  bandeira?: BandeiraCartao
+  limite?: number
+  diaVencimento?: number
+  melhorDiaCompra?: number
+  userId: string
+  criadoEm: string
+}
+
+export interface CartaoCreditoForm {
+  nome: string
+  banco: string
+  bandeira?: BandeiraCartao
+  limite?: number
+  diaVencimento?: number
+  melhorDiaCompra?: number
+}
+
 export interface Pagamento {
   id: string
   userId: string
@@ -32,6 +55,11 @@ export interface Despesa {
   nome: string
   categoria: Categoria
   metodoPagamento: MetodoPagamento
+  cartaoId?: string
+  paraAmigoId?: string
+  paraAmigoNome?: string
+  paraAmigoEmail?: string
+  statusCompartilhamento?: 'pendente' | 'aceito' | 'recusado'
   tipo?: 'padrao' | 'financiamento'
   parcelas: number
   valorTotal: number
@@ -53,6 +81,10 @@ export interface DespesaForm {
   nome: string
   categoria: Categoria
   metodoPagamento: MetodoPagamento
+  cartaoId?: string
+  paraAmigoId?: string
+  paraAmigoNome?: string
+  paraAmigoEmail?: string
   tipo: 'padrao' | 'financiamento'
   parcelas: number
   valorTotal: number

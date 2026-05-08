@@ -1,16 +1,17 @@
 import { useState } from 'react'
-import type { Despesa, DespesaForm as DespesaFormType, Categoria, MetodoPagamento } from '../../types'
+import { CalendarDays, Handshake, User, Users, Scale, Banknote, Check } from 'lucide-react'
+import type { Despesa, DespesaForm as DespesaFormType, Categoria, MetodoPagamento, CartaoCredito } from '../../types'
 
-const CATEGORIAS: { value: Categoria; label: string; emoji: string }[] = [
-  { value: 'casa', label: 'Casa', emoji: '🏠' },
-  { value: 'pessoal', label: 'Pessoal', emoji: '👤' },
-  { value: 'saude', label: 'Saúde', emoji: '❤️' },
-  { value: 'locomocao', label: 'Locomoção', emoji: '🚗' },
-  { value: 'beleza', label: 'Beleza', emoji: '✨' },
-  { value: 'alimentacao', label: 'Alimentação', emoji: '🍽️' },
-  { value: 'educacao', label: 'Educação', emoji: '📚' },
-  { value: 'lazer', label: 'Lazer', emoji: '🎮' },
-  { value: 'outros', label: 'Outros', emoji: '📦' },
+const CATEGORIAS: { value: Categoria; label: string }[] = [
+  { value: 'casa', label: 'Casa' },
+  { value: 'pessoal', label: 'Pessoal' },
+  { value: 'saude', label: 'Saúde' },
+  { value: 'locomocao', label: 'Locomoção' },
+  { value: 'beleza', label: 'Beleza' },
+  { value: 'alimentacao', label: 'Alimentação' },
+  { value: 'educacao', label: 'Educação' },
+  { value: 'lazer', label: 'Lazer' },
+  { value: 'outros', label: 'Outros' },
 ]
 
 const METODOS: { value: MetodoPagamento; label: string }[] = [
@@ -25,6 +26,7 @@ interface Amigo { id: string; nome: string; email: string }
 interface Props {
   inicial?: Despesa
   amigos: Amigo[]
+  cartoes: CartaoCredito[]
   onSalvar: (form: DespesaFormType) => Promise<void>
   onCancelar: () => void
 }
@@ -39,11 +41,12 @@ const FORM_VAZIO: DespesaFormType = {
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: Props) {
+export default function DespesaForm({ inicial, amigos, cartoes, onSalvar, onCancelar }: Props) {
   const [form, setForm] = useState<DespesaFormType>(
     inicial ? {
       nome: inicial.nome, categoria: inicial.categoria,
       metodoPagamento: inicial.metodoPagamento,
+      cartaoId: inicial.cartaoId,
       tipo: inicial.tipo ?? 'padrao',
       parcelas: inicial.parcelas,
       valorTotal: inicial.valorTotal ?? (inicial as any).valor ?? 0,
@@ -54,6 +57,8 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
     } : FORM_VAZIO
   )
   const [loading, setLoading] = useState(false)
+
+  const [paraAmigoAtivo, setParaAmigoAtivo] = useState(!!inicial?.paraAmigoId)
 
   // Estado local do rateio
   const [rateioAtivo, setRateioAtivo] = useState(inicial?.rateio?.ativo ?? false)
@@ -175,7 +180,7 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
         </div>
 
         <div className="field">
-          <label>{isFinanciamento ? 'Próximo vencimento' : `Data do vencimento${form.parcelas > 1 ? ' da 1ª parcela' : ''}`}</label>
+          <label>{isFinanciamento ? 'Próximo vencimento' : `Data do vencimento`}</label>
           <input type="date" value={form.data} onChange={(e) => set('data', e.target.value)} required />
         </div>
 
@@ -197,9 +202,105 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
         ) : (
           <div className="field">
             <label>Método de pagamento</label>
-            <select value={form.metodoPagamento} onChange={(e) => set('metodoPagamento', e.target.value)}>
+            <select value={form.metodoPagamento} onChange={(e) => {
+              set('metodoPagamento', e.target.value)
+              if (e.target.value !== 'credito') { set('parcelas', 1); set('cartaoId', undefined) }
+            }}>
               {METODOS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
+          </div>
+        )}
+
+        {!isFinanciamento && form.metodoPagamento === 'credito' && (
+          <div className="field">
+            <label>Cartão</label>
+            {cartoes.length > 0 ? (
+              <select value={form.cartaoId ?? ''} onChange={(e) => set('cartaoId', e.target.value || undefined)}>
+                <option value="">Selecionar cartão</option>
+                {cartoes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome} · {c.banco}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="cartao-vazio">
+                Cadastre seus cartões em <strong>Conta</strong>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!isFinanciamento && form.metodoPagamento === 'credito' && amigos.length > 0 && (
+          <div className="field full">
+            <button
+              type="button"
+              className={`rateio-toggle-header ${paraAmigoAtivo ? 'ativo' : ''}`}
+              onClick={() => {
+                setParaAmigoAtivo(!paraAmigoAtivo)
+                if (paraAmigoAtivo) {
+                  set('paraAmigoId', undefined)
+                  set('paraAmigoNome', undefined)
+                  set('paraAmigoEmail', undefined)
+                }
+              }}
+            >
+              <div className="rateio-header-left">
+                <span className="rateio-icon"><User size={20} /></span>
+                <div>
+                  <span className="rateio-header-titulo">Despesa para um amigo</span>
+                  <span className="rateio-header-sub">
+                    {form.paraAmigoId
+                      ? `Para ${amigos.find(a => a.id === form.paraAmigoId)?.nome ?? '?'} · aguarda aprovação`
+                      : 'Cobrar este cartão em nome de alguém'}
+                  </span>
+                </div>
+              </div>
+              <div className={`rateio-toggle-pill ${paraAmigoAtivo ? 'on' : 'off'}`}>
+                <div className="rateio-toggle-dot" />
+              </div>
+            </button>
+
+            {paraAmigoAtivo && (
+              <div className="rateio-box" style={{ marginTop: '0.75rem' }}>
+                <div className="amigos-lista">
+                  <span className="amigos-label">Selecione o amigo</span>
+                  {amigos.map((amigo) => {
+                    const selecionado = form.paraAmigoId === amigo.id
+                    return (
+                      <div key={amigo.id} className={`amigo-toggle ${selecionado ? 'selecionado' : ''}`}>
+                        <button type="button" className="amigo-toggle-btn"
+                          onClick={() => {
+                            if (selecionado) {
+                              set('paraAmigoId', undefined)
+                              set('paraAmigoNome', undefined)
+                              set('paraAmigoEmail', undefined)
+                            } else {
+                              set('paraAmigoId', amigo.id)
+                              set('paraAmigoNome', amigo.nome)
+                              set('paraAmigoEmail', amigo.email)
+                            }
+                          }}>
+                          <span className="amigo-avatar-sm">{amigo.nome.charAt(0).toUpperCase()}</span>
+                          <div className="amigo-info-sm">
+                            <span className="amigo-nome-sm">{amigo.nome}</span>
+                            <span className="amigo-email-sm">{amigo.email}</span>
+                          </div>
+                          <div className={`amigo-check-box ${selecionado ? 'on' : ''}`}>
+                            {selecionado && <Check size={12} />}
+                          </div>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+                {form.paraAmigoId && (
+                  <div className="amigo-aviso">
+                    A despesa ficará <strong>pendente de aprovação</strong> do amigo e compromete seu limite do cartão.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -212,21 +313,23 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
           </div>
         )}
 
-        <div className="field">
-          <label>{isFinanciamento ? 'Meses restantes' : 'Parcelas'}</label>
-          <input
-            type="number"
-            min="1"
-            max="420"
-            value={form.parcelas}
-            onChange={(e) => set('parcelas', Math.max(1, Math.min(420, parseInt(e.target.value) || 1)))}
-          />
-        </div>
+        {(isFinanciamento || form.metodoPagamento === 'credito') && (
+          <div className="field">
+            <label>{isFinanciamento ? 'Meses restantes' : 'Parcelas'}</label>
+            <input
+              type="number"
+              min="1"
+              max="420"
+              value={form.parcelas}
+              onChange={(e) => set('parcelas', Math.max(1, Math.min(420, parseInt(e.target.value) || 1)))}
+            />
+          </div>
+        )}
 
         {valorParcela && (
           <div className="field full">
             <div className="parcela-preview">
-              <span>📅</span>
+              <CalendarDays size={16} />
               {isFinanciamento ? (
                 <span>{form.parcelas}x de <strong>{fmt(valorParcela)}/mês</strong> — saldo devedor <strong>{fmt(form.valorTotal)}</strong></span>
               ) : (
@@ -256,7 +359,7 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
             onClick={() => { setRateioAtivo(!rateioAtivo); if (rateioAtivo) setParticipantes([]) }}
           >
             <div className="rateio-header-left">
-              <span className="rateio-icon">🤝</span>
+              <span className="rateio-icon"><Handshake size={20} /></span>
               <div>
                 <span className="rateio-header-titulo">Ratear despesa</span>
                 <span className="rateio-header-sub">
@@ -275,7 +378,7 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
             <div className="rateio-box">
               {amigos.length === 0 ? (
                 <div className="rateio-empty">
-                  <span>👥</span>
+                  <Users size={24} />
                   <p>Adicione amigos na aba <strong>Conta</strong> para ratear despesas.</p>
                 </div>
               ) : (
@@ -285,12 +388,12 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
                     <button type="button"
                       className={`tipo-tab ${tipoRateio === 'pessoa' ? 'active' : ''}`}
                       onClick={() => setTipoRateio('pessoa')}>
-                      ⚖️ Igualitário
+                      <Scale size={14} /> Igualitário
                     </button>
                     <button type="button"
                       className={`tipo-tab ${tipoRateio === 'renda' ? 'active' : ''}`}
                       onClick={() => setTipoRateio('renda')}>
-                      💰 Por renda
+                      <Banknote size={14} /> Por renda
                     </button>
                   </div>
 
@@ -323,7 +426,7 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
                               })()}
                             </div>
                             <div className={`amigo-check-box ${selecionado ? 'on' : ''}`}>
-                              {selecionado ? '✓' : ''}
+                              {selecionado && <Check size={12} />}
                             </div>
                           </button>
                         </div>
@@ -425,10 +528,15 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
           box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         }
 
-        .form-grid { 
-          display: grid; 
-          grid-template-columns: 1fr 1fr; 
-          gap: 1.25rem; 
+        .form-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1.25rem;
+        }
+        @media (max-width: 480px) {
+          .form-grid { grid-template-columns: 1fr; }
+          .form-actions { flex-direction: column-reverse; }
+          .btn-primary, .btn-ghost { width: 100%; text-align: center; }
         }
 
         .field { display: flex; flex-direction: column; gap: 0.5rem; }
@@ -476,41 +584,6 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
         }
         .parcela-preview strong { color: #2D3436; font-weight: 700; }
 
-        /* Checkbox e Radios customizados */
-        .checkbox-label {
-          display: flex; 
-          align-items: center; 
-          gap: 0.6rem; 
-          cursor: pointer;
-          color: #636E72 !important; 
-          font-size: 0.9rem !important;
-          text-transform: none !important; 
-          font-weight: 500 !important;
-        }
-        .checkbox-label input { 
-          width: 18px; height: 18px; 
-          accent-color: #C8A45A; 
-        }
-
-        .rateio-opcoes {
-          display: flex; 
-          gap: 1.5rem; 
-          margin-top: 0.5rem;
-          padding: 1rem; 
-          background: #F8F9FA; 
-          border-radius: 12px;
-        }
-        .radio-label { 
-          display: flex; 
-          align-items: center; 
-          gap: 0.5rem; 
-          color: #636E72; 
-          font-size: 0.85rem; 
-          cursor: pointer; 
-          font-weight: 500;
-        }
-        .radio-label input { accent-color: #C8A45A; }
-        .rateio-hint { color: #555; font-size: 0.82rem; font-style: italic; }
         /* Rateio toggle header */
         .rateio-toggle-header {
           display: flex; align-items: center; justify-content: space-between;
@@ -521,7 +594,7 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
         .rateio-toggle-header.ativo { border-color: #C8A45A; background: rgba(200,164,90,0.04); }
         .rateio-toggle-header:hover { border-color: #C8A45A; }
         .rateio-header-left { display: flex; align-items: center; gap: 0.75rem; }
-        .rateio-icon { font-size: 1.2rem; }
+        .rateio-icon { display: inline-flex; align-items: center; color: #636E72; }
         .rateio-header-titulo { display: block; color: #2d3436; font-size: 0.88rem; font-weight: 600; text-align: left; }
         .rateio-header-sub { display: block; color: #95A5A6; font-size: 0.75rem; text-align: left; margin-top: 0.1rem; }
         .rateio-toggle-pill {
@@ -567,6 +640,11 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
     background: transparent;
     color: #7F8C8D;
     transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    font-family: inherit;
   }
   .tipo-tab.active {
     background: #FFFFFF;
@@ -717,8 +795,22 @@ export default function DespesaForm({ inicial, amigos, onSalvar, onCancelar }: P
           display: flex; align-items: center; gap: 0.75rem;
           color: #95A5A6; font-size: 0.82rem; padding: 0.5rem;
         }
-        .rateio-empty span { font-size: 1.5rem; }
         .rateio-empty strong { color: #C8A45A; }
+
+        .cartao-vazio {
+          background: #FFFDF7; border: 1px dashed rgba(200,164,90,0.35);
+          border-radius: 12px; padding: 0.75rem 1rem;
+          color: #95A5A6; font-size: 0.82rem;
+        }
+        .cartao-vazio strong { color: #C8A45A; }
+
+        .amigo-email-sm { color: #95A5A6; font-size: 0.72rem; }
+        .amigo-aviso {
+          background: #FFFDF7; border: 1px solid rgba(200,164,90,0.2);
+          border-radius: 10px; padding: 0.75rem 1rem;
+          color: #636E72; font-size: 0.78rem; line-height: 1.5;
+        }
+        .amigo-aviso strong { color: #C8A45A; }
 
         .btn-primary {
           background: #C8A45A; 

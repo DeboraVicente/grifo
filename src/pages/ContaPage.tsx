@@ -1,18 +1,88 @@
 import { useState } from 'react'
-import { Check, X, CheckCircle2 } from 'lucide-react'
+import { Check, X, CheckCircle2, Trash2, CreditCard, Pencil } from 'lucide-react'
 import { useAuthContext } from '../lib/AuthContext'
 import { useAmizades } from '../hooks/useAmizades'
-import type { Amizade } from '../types'
+import { useCartoes } from '../hooks/useCartoes'
+import type { Amizade, BandeiraCartao, CartaoCredito } from '../types'
+
+const BANCOS = ['Nubank', 'Itaú', 'Santander', 'Caixa', 'C6 Bank', 'Outro']
+const BANDEIRAS: { value: BandeiraCartao; label: string }[] = [
+  { value: 'visa', label: 'Visa' },
+  { value: 'mastercard', label: 'Mastercard' },
+  { value: 'elo', label: 'Elo' },
+  { value: 'outros', label: 'Outros' },
+]
 
 export default function ContaPage() {
   const { user, signOut } = useAuthContext()
   const { amigos, pendentesRecebidas, amizades, enviarSolicitacao, responderSolicitacao } =
     useAmizades(user?.uid, user?.email ?? '', user?.displayName ?? '')
+  const { cartoes, criar: criarCartao, editar: editarCartao, remover: removerCartao } = useCartoes(user?.uid)
 
   const [email, setEmail] = useState('')
   const [feedback, setFeedback] = useState<{ tipo: 'ok' | 'erro'; msg: string } | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [tab, setTab] = useState<'amigos' | 'pendentes'>('amigos')
+
+  const CARTAO_VAZIO = { nome: '', banco: '', bandeira: '' as BandeiraCartao | '', limite: '', diaVencimento: '', melhorDiaCompra: '' }
+  const [novoCartao, setNovoCartao] = useState(CARTAO_VAZIO)
+  const [editandoCartao, setEditandoCartao] = useState<CartaoCredito | null>(null)
+  const [salvandoCartao, setSalvandoCartao] = useState(false)
+  const [feedbackCartao, setFeedbackCartao] = useState<{ tipo: 'ok' | 'erro'; msg: string } | null>(null)
+
+  const handleRemoverCartao = async (id: string) => {
+    setFeedbackCartao(null)
+    const resultado = await removerCartao(id)
+    if (resultado === 'vinculado') {
+      setFeedbackCartao({ tipo: 'erro', msg: 'Este cartão está vinculado a despesas e não pode ser excluído.' })
+    } else if (resultado === 'erro') {
+      setFeedbackCartao({ tipo: 'erro', msg: 'Erro ao excluir. Tente novamente.' })
+    }
+  }
+
+  const [exibirFormCartao, setExibirFormCartao] = useState(false)
+
+  const handleAbrirEditar = (c: CartaoCredito) => {
+    setEditandoCartao(c)
+    setNovoCartao({
+      nome: c.nome,
+      banco: c.banco,
+      bandeira: c.bandeira ?? '',
+      limite: c.limite ? String(c.limite) : '',
+      diaVencimento: c.diaVencimento ? String(c.diaVencimento) : '',
+      melhorDiaCompra: c.melhorDiaCompra ? String(c.melhorDiaCompra) : '',
+    })
+    setExibirFormCartao(true)
+  }
+
+  const handleCancelarCartao = () => {
+    setExibirFormCartao(false)
+    setEditandoCartao(null)
+    setNovoCartao(CARTAO_VAZIO)
+  }
+
+  const handleAddCartao = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!novoCartao.nome || !novoCartao.banco) return
+    setSalvandoCartao(true)
+    const form = {
+      nome: novoCartao.nome,
+      banco: novoCartao.banco,
+      bandeira: novoCartao.bandeira || undefined,
+      limite: novoCartao.limite ? parseFloat(novoCartao.limite) : undefined,
+      diaVencimento: novoCartao.diaVencimento ? parseInt(novoCartao.diaVencimento) : undefined,
+      melhorDiaCompra: novoCartao.melhorDiaCompra ? parseInt(novoCartao.melhorDiaCompra) : undefined,
+    }
+    if (editandoCartao) {
+      await editarCartao(editandoCartao.id, form)
+    } else {
+      await criarCartao(form)
+    }
+    setNovoCartao(CARTAO_VAZIO)
+    setSalvandoCartao(false)
+    setExibirFormCartao(false)
+    setEditandoCartao(null)
+  }
 
   const handleConvidar = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,6 +119,119 @@ export default function ContaPage() {
           <span className="perfil-email">{user?.email}</span>
         </div>
         <button className="btn-sair" onClick={signOut}>Sair</button>
+      </div>
+
+      {/* Cartões de crédito */}
+      <div className="section-card">
+        <div className="section-header-row">
+          <h3 className="section-titulo">Meus cartões</h3>
+          {!exibirFormCartao && (
+            <button className="btn-add-inline" onClick={() => { setEditandoCartao(null); setNovoCartao(CARTAO_VAZIO); setExibirFormCartao(true) }}>
+              + Cartão
+            </button>
+          )}
+        </div>
+        
+        <p className="section-desc">Gerencie seus cartões de crédito para categorizar despesas.</p>
+
+        {cartoes.length > 0 && (
+          <div className="cartoes-lista">
+            {cartoes.map((c) => (
+              <div key={c.id} className="cartao-row">
+                <div className="cartao-icone"><CreditCard size={18} /></div>
+                <div className="cartao-info">
+                  <span className="cartao-nome">{c.nome}</span>
+                  <span className="cartao-banco">
+                    {c.banco}{c.bandeira ? ` · ${BANDEIRAS.find(b => b.value === c.bandeira)?.label ?? c.bandeira}` : ''}
+                    {c.limite ? ` · R$ ${c.limite.toLocaleString('pt-BR')}` : ''}
+                    {c.diaVencimento ? ` · vence dia ${c.diaVencimento}` : ''}
+                  </span>
+                </div>
+                <button className="btn-editar-cartao" onClick={() => handleAbrirEditar(c)} title="Editar">
+                  <Pencil size={13} />
+                </button>
+                <button className="btn-remover-cartao" onClick={() => handleRemoverCartao(c.id)} title="Remover">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {exibirFormCartao && (
+          <form onSubmit={handleAddCartao} className="cartao-form-container animar-entrada">
+            <span className="form-cartao-titulo">{editandoCartao ? `Editando: ${editandoCartao.nome}` : 'Novo cartão'}</span>
+            <input
+              type="text"
+              placeholder="Nome do cartão (ex: Nubank Gold)"
+              value={novoCartao.nome}
+              onChange={(e) => setNovoCartao((s) => ({ ...s, nome: e.target.value }))}
+              required
+              className="convidar-input"
+            />
+            <div className="cartao-form-row">
+              <select
+                value={novoCartao.banco}
+                onChange={(e) => setNovoCartao((s) => ({ ...s, banco: e.target.value }))}
+                required
+                className="cartao-select"
+              >
+                <option value="">Banco</option>
+                {BANCOS.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
+              <select
+                value={novoCartao.bandeira}
+                onChange={(e) => setNovoCartao((s) => ({ ...s, bandeira: e.target.value as BandeiraCartao | '' }))}
+                className="cartao-select"
+              >
+                <option value="">Bandeira</option>
+                {BANDEIRAS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
+              </select>
+            </div>
+            <input
+              type="number"
+              placeholder="Limite do cartão (R$)"
+              min="0"
+              step="100"
+              value={novoCartao.limite}
+              onChange={(e) => setNovoCartao((s) => ({ ...s, limite: e.target.value }))}
+              className="convidar-input"
+            />
+            <div className="cartao-form-row">
+              <input
+                type="number"
+                placeholder="Dia de vencimento (1–31)"
+                min="1"
+                max="31"
+                value={novoCartao.diaVencimento}
+                onChange={(e) => setNovoCartao((s) => ({ ...s, diaVencimento: e.target.value }))}
+                className="convidar-input"
+              />
+              <input
+                type="number"
+                placeholder="Melhor dia de compra (1–31)"
+                min="1"
+                max="31"
+                value={novoCartao.melhorDiaCompra}
+                onChange={(e) => setNovoCartao((s) => ({ ...s, melhorDiaCompra: e.target.value }))}
+                className="convidar-input"
+              />
+            </div>
+            <div className="form-actions-inline">
+              <button type="button" className="btn-cancelar-inline" onClick={handleCancelarCartao}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn-salvar-inline" disabled={salvandoCartao}>
+                {salvandoCartao ? '...' : editandoCartao ? 'Salvar edição' : 'Salvar cartão'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {feedbackCartao && (
+          <p className={`feedback ${feedbackCartao.tipo}`}>{feedbackCartao.msg}</p>
+        )}
+
       </div>
 
       {/* Convidar */}
@@ -241,7 +424,116 @@ export default function ContaPage() {
           font-size: 0.7rem; color: #95A5A6; background: #E0E0E0;
           border-radius: 6px; padding: 0.2rem 0.6rem; flex-shrink: 0;
         }
+
+        .cartoes-lista { display: flex; flex-direction: column; gap: 0.5rem; }
+        .cartao-row {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 0.65rem 0.75rem; background: #F8F9FA; border-radius: 10px;
+        }
+        .cartao-icone { display: flex; align-items: center; color: #95A5A6; flex-shrink: 0; }
+        .cartao-info { flex: 1; display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+        .cartao-nome { color: #2d3436; font-size: 0.85rem; font-weight: 600; }
+        .cartao-banco { color: #95A5A6; font-size: 0.75rem; }
+        .btn-editar-cartao {
+          background: transparent; border: none; color: #BDC3C7;
+          cursor: pointer; padding: 0.3rem; border-radius: 6px;
+          display: flex; align-items: center; transition: color 0.15s; flex-shrink: 0;
+        }
+        .btn-editar-cartao:hover { color: #C8A45A; }
+        .btn-remover-cartao {
+          background: transparent; border: none; color: #BDC3C7;
+          cursor: pointer; padding: 0.3rem; border-radius: 6px;
+          display: flex; align-items: center; transition: color 0.15s;
+          flex-shrink: 0;
+        }
+        .btn-remover-cartao:hover { color: #e05c5c; }
+        .form-cartao-titulo { font-size: 0.75rem; font-weight: 700; color: #95A5A6; text-transform: uppercase; letter-spacing: 0.04em; }
+
+        .cartao-form { display: flex; flex-direction: column; gap: 0.5rem; }
+        .cartao-form-row { display: flex; gap: 0.5rem; }
+        @media (max-width: 480px) {
+          .cartao-form-row { flex-direction: column; }
+          .convidar-form { flex-direction: column; }
+          .btn-convidar { width: 100%; }
+        }
+        .cartao-select {
+          background: #F8F9FA; border: 1px solid #E0E0E0; border-radius: 10px;
+          color: #2d3436; padding: 0.7rem 0.9rem; font-size: 0.88rem;
+          outline: none; transition: border-color 0.2s; font-family: inherit;
+        }
+          .section-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .btn-add-inline {
+    background: rgba(200, 164, 90, 0.1);
+    color: #C8A45A;
+    border: 1px solid rgba(200, 164, 90, 0.2);
+    border-radius: 8px;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-add-inline:hover {
+    background: #C8A45A;
+    color: #fff;
+  }
+
+  .cartao-form-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 1rem;
+    background: #F1F2F6;
+    border-radius: 12px;
+    margin-top: 0.5rem;
+  }
+
+  .form-actions-inline {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+  }
+
+  .btn-salvar-inline {
+    flex: 1;
+    background: #C8A45A;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .btn-cancelar-inline {
+    flex: 1;
+    background: transparent;
+    border: 1px solid #E0E0E0;
+    color: #95A5A6;
+    border-radius: 8px;
+    padding: 0.6rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .animar-entrada {
+    animation: fadeInDown 0.3s ease-out;
+  }
+
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+        .cartao-select:focus { border-color: #C8A45A; background: #fff; }
       `}</style>
+
     </div>
   )
 }

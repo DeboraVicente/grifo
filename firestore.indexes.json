@@ -23,6 +23,22 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "data", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "cartoes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "nome", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "despesas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "cartaoId", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

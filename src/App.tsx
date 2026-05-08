@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Receipt, PiggyBank, BarChart2 } from 'lucide-react'
+import { Receipt, PiggyBank, BarChart2, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAuthContext } from './lib/AuthContext'
 import AuthPage from './pages/AuthPage'
@@ -7,18 +7,20 @@ import DespesasPage from './pages/DespesasPage'
 import CaixinhasPage from './pages/CaixinhasPage'
 import ContaPage from './pages/ContaPage'
 import RelatoriosPage from './pages/RelatoriosPage'
+import ReceitasPage from './pages/ReceitasPage'
 
-type Tab = 'despesas' | 'caixinhas' | 'conta' | 'relatorios'
+type Tab = 'despesas' | 'caixinhas' | 'conta' | 'relatorios' | 'receitas'
 
 const NAV_ITEMS: { id: Tab; label: string; Icon: LucideIcon }[] = [
-  { id: 'despesas', label: 'Despesas', Icon: Receipt },
-  { id: 'caixinhas', label: 'Caixinhas', Icon: PiggyBank },
   { id: 'relatorios', label: 'Relatórios', Icon: BarChart2 },
+  { id: 'despesas', label: 'Despesas', Icon: Receipt },
+  { id: 'receitas', label: 'Receitas', Icon: TrendingUp },
+  { id: 'caixinhas', label: 'Caixinhas', Icon: PiggyBank },
 ]
 
 export default function App() {
   const { user, loading, signOut } = useAuthContext()
-  const [tab, setTab] = useState<Tab>('despesas')
+  const [tab, setTab] = useState<Tab>('relatorios')
   
   // Estado para controlar a visibilidade do menu de perfil
   const [menuAberto, setMenuAberto] = useState(false)
@@ -100,10 +102,11 @@ export default function App() {
 
         <main className="app-main">
           <div className="content-limit">
+            {tab === 'relatorios' && <RelatoriosPage />}
             {tab === 'despesas' && <DespesasPage />}
+            {tab === 'receitas' && <ReceitasPage />}
             {tab === 'caixinhas' && <CaixinhasPage />}
             {tab === 'conta' && <ContaPage />}
-            {tab === 'relatorios' && <RelatoriosPage />}
           </div>
         </main>
       </div>

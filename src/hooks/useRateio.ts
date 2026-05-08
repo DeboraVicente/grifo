@@ -120,3 +120,43 @@ export function useRateioRecebido(userId: string | undefined) {
 
   return { despesasRateadas, loading, responderRateio, pagarParteRateio }
 }
+
+// Despesas que alguém criou para o usuário ("para amigo")
+export function useCompartilhadoRecebido(userId: string | undefined) {
+  const [despesasCompartilhadas, setDespesasCompartilhadas] = useState<Despesa[]>([])
+
+  useEffect(() => {
+    if (!userId) return
+    const q = query(
+      collection(db, 'despesas'),
+      where('compartilhadoComIds', 'array-contains', userId)
+    )
+    return onSnapshot(q, (snap) => {
+      setDespesasCompartilhadas(snap.docs.map((d) => {
+        const raw = d.data()
+        return {
+          id: d.id,
+          ...raw,
+          valorTotal: raw.valorTotal ?? 0,
+          valorParcela: raw.valorParcela ?? 0,
+          listaParcelas: raw.listaParcelas ?? [],
+          adiantamentos: raw.adiantamentos ?? [],
+          criadoEm: (raw.criadoEm as Timestamp)?.toDate().toISOString() ?? '',
+          atualizadoEm: (raw.atualizadoEm as Timestamp)?.toDate().toISOString() ?? '',
+        }
+      }) as Despesa[])
+    })
+  }, [userId])
+
+  const responderCompartilhamento = async (
+    despesaId: string,
+    resposta: 'aceito' | 'recusado'
+  ) => {
+    await updateDoc(doc(db, 'despesas', despesaId), {
+      statusCompartilhamento: resposta,
+      atualizadoEm: serverTimestamp(),
+    })
+  }
+
+  return { despesasCompartilhadas, responderCompartilhamento }
+}

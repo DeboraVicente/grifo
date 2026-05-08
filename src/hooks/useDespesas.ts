@@ -94,6 +94,12 @@ export function useDespesas(userId: string | undefined) {
       nome: form.nome,
       categoria: form.categoria,
       metodoPagamento: form.metodoPagamento,
+      cartaoId: form.cartaoId ?? null,
+      paraAmigoId: form.paraAmigoId ?? null,
+      paraAmigoNome: form.paraAmigoNome ?? null,
+      paraAmigoEmail: form.paraAmigoEmail ?? null,
+      statusCompartilhamento: form.paraAmigoId ? 'pendente' : null,
+      compartilhadoComIds: form.paraAmigoId ? [form.paraAmigoId] : [],
       tipo: form.tipo ?? 'padrao',
       parcelas: form.parcelas,
       valorTotal: form.valorTotal,
@@ -137,7 +143,7 @@ export function useDespesas(userId: string | undefined) {
       : despesa.listaParcelas
 
     await updateDoc(doc(db, 'despesas', id), {
-      ...form,
+      ...stripUndefined(form as Record<string, any>),
       valorParcela: novaValorParcela,
       ...(form.tipo === 'financiamento' ? { saldoDevedor: novoTotal } : {}),
       listaParcelas,
@@ -149,14 +155,20 @@ export function useDespesas(userId: string | undefined) {
     await deleteDoc(doc(db, 'despesas', id))
   }
 
+  // Remove valores undefined de um objeto antes de salvar no Firestore
+  const stripUndefined = (obj: Record<string, any>): Record<string, any> =>
+    Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined))
+
   // Registra pagamento em uma parcela específica
   const pagarParcela = async (despesaId: string, numeroParcela: number, pagamento: Omit<Pagamento, 'id' | 'userId'>) => {
     const despesa = despesas.find((d) => d.id === despesaId)
     if (!despesa) return
 
+    const novoPagamento = stripUndefined({ ...pagamento, id: crypto.randomUUID(), userId: userId! })
+
     const listaParcelas = despesa.listaParcelas.map((p) => {
       if (p.numero !== numeroParcela) return p
-      const pagamentos = [...p.pagamentos, { ...pagamento, id: crypto.randomUUID(), userId: userId! }]
+      const pagamentos = [...p.pagamentos, novoPagamento as Pagamento]
       const totalPago = pagamentos.reduce((s, pg) => s + pg.valor, 0)
       return { ...p, pagamentos, pago: totalPago >= p.valor }
     })
@@ -186,7 +198,7 @@ export function useDespesas(userId: string | undefined) {
   ) => {
     const despesa = despesas.find((d) => d.id === id)
     if (!despesa) return
-    const novoAdiantamento = { ...adiantamento, id: crypto.randomUUID(), userId: userId! }
+    const novoAdiantamento = stripUndefined({ ...adiantamento, id: crypto.randomUUID(), userId: userId! }) as Pagamento
     const updates: Record<string, any> = {
       adiantamentos: [...(despesa.adiantamentos || []), novoAdiantamento],
       atualizadoEm: serverTimestamp(),
@@ -211,5 +223,25 @@ export function useDespesas(userId: string | undefined) {
     await updateDoc(doc(db, 'despesas', id), updates)
   }
 
-  return { despesas, loading, criar, editar, remover, pagarParcela, adicionarAdiantamento }
+  const removerPagamento = async (despesaId: string, numeroParcela: number, pagamentoId: string) => {
+    const despesa = despesas.find((d) => d.id === despesaId)
+    if (!despesa) return
+
+    const listaParcelas = despesa.listaParcelas.map((p) => {
+      if (p.numero !== numeroParcela) return p
+      const pagamentos = p.pagamentos.filter((pg) => pg.id !== pagamentoId)
+      const totalPago = pagamentos.reduce((s, pg) => s + pg.valor, 0)
+      return { ...p, pagamentos, pago: totalPago >= p.valor }
+    })
+
+    const todasParcelasPagas = listaParcelas.every((p) => p.pago)
+
+    await updateDoc(doc(db, 'despesas', despesaId), {
+      listaParcelas,
+      pago: todasParcelasPagas,
+      atualizadoEm: serverTimestamp(),
+    })
+  }
+
+  return { despesas, loading, criar, editar, remover, pagarParcela, removerPagamento, adicionarAdiantamento }
 }

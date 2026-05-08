@@ -189,7 +189,9 @@ export function calcControleParcelamentos(despesas: Despesa[]): ParcelamentoDado
     .map((d) => {
       const pagas = d.listaParcelas.filter((p) => p.pago).length
       const naopagas = d.listaParcelas.filter((p) => !p.pago)
-      const totalRestante = naopagas.reduce((s, p) => s + p.valor, 0)
+      const totalRestante = d.tipo === 'financiamento'
+        ? (d.saldoDevedor ?? naopagas.reduce((s, p) => s + p.valor, 0))
+        : naopagas.reduce((s, p) => s + p.valor, 0)
       const ordenadas = [...naopagas].sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento))
       return {
         id: d.id,

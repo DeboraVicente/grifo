@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import { CreditCard } from 'lucide-react'
 import { useDespesas } from '../hooks/useDespesas'
 import { useAmizades } from '../hooks/useAmizades'
-import { useRateioRecebido } from '../hooks/useRateio'
+import { useCartoes } from '../hooks/useCartoes'
+import { useRateioRecebido, useCompartilhadoRecebido } from '../hooks/useRateio'
 import { useAuthContext } from '../lib/AuthContext'
 import DespesaCard from '../components/despesas/DespesaCard'
 import DespesaForm from '../components/despesas/DespesaForm'
@@ -10,18 +12,20 @@ import Modal from '../components/ui/Modal'
 import type { Despesa, DespesaForm as DespesaFormType } from '../types'
 
 type ModalTipo = 'criar' | 'editar' | 'pagar' | 'adiantar' | 'pagar-rateio' | null
-type FiltroTipo = 'todas' | 'rateados' | 'pendentes' | 'pagas' | 'rateados-pendente' 
+type FiltroTipo = 'todas' | 'rateados' | 'pendentes' | 'parcialmente-pagas' | 'pagas' | 'rateados-pendente'
 
 export default function DespesasPage() {
   const { user } = useAuthContext()
-  const { despesas, loading, criar, editar, remover, pagarParcela, adicionarAdiantamento } = useDespesas(user?.uid)
+  const { despesas, loading, criar, editar, remover, pagarParcela, removerPagamento, adicionarAdiantamento } = useDespesas(user?.uid)
   const { amigos } = useAmizades(user?.uid, user?.email ?? '', user?.displayName ?? '')
+  const { cartoes } = useCartoes(user?.uid)
   const { despesasRateadas, responderRateio, pagarParteRateio } = useRateioRecebido(user?.uid)
+  const { despesasCompartilhadas, responderCompartilhamento } = useCompartilhadoRecebido(user?.uid)
 
   const [modal, setModal] = useState<ModalTipo>(null)
   const [selecionada, setSelecionada] = useState<Despesa | null>(null)
   const [parcelaSelecionada, setParcelaSelecionada] = useState<number>(1)
-  const [filtro, setFiltro] = useState<FiltroTipo>('todas')
+  const [filtro, setFiltro] = useState<FiltroTipo>('pendentes')
   const [pagina, setPagina] = useState(0)
   const ITENS_POR_PAGINA = 8
 
@@ -43,22 +47,13 @@ export default function DespesasPage() {
     return p?.status === 'aceito'
   })
   
-  // Helper: extrai o valor devido pelo usuário numa despesa rateada
-  const meuValorRateio = (d: Despesa): number => {
-    const p = (d.rateio as any).participantes?.find((p: any) => p.userId === user?.uid)
-    return p?.valorDevido ?? 0
-  }
-  const meuValorRateioMes = (d: Despesa): number => {
-    const p = (d.rateio as any).participantes?.find((p: any) => p.userId === user?.uid)
-    return p?.valorDevidoParcela ?? p?.valorDevido ?? 0
-  }
-
   // 2. Lógica de Filtragem da Lista
   const despesasExibidas = (() => {
     if (filtro === 'rateados-pendente') return rateiosPendentes
     const proprias = despesas.filter((d) => {
       if (filtro === 'rateados') return d.rateio?.ativo && (d.rateio as any).participantes.some((p: any) => p.userId === user?.uid)
       if (filtro === 'pendentes') return !d.pago
+      if (filtro === 'parcialmente-pagas') return !d.pago && (d.listaParcelas?.some(p => p.pago) ?? false)
       if (filtro === 'pagas') return d.pago
       return true
     })
@@ -99,46 +94,6 @@ export default function DespesasPage() {
     fecharModal()
   }
 
-  // 4. Cálculos de Resumo (Cards de cima)
-  const agora = new Date()
-  const mesAtual = agora.getMonth()
-  const anoAtual = agora.getFullYear()
-
-  // Soma das próprias despesas no mês
-  const totalMesProprio = despesas.reduce((acc, d) => {
-    if (!d.listaParcelas || d.listaParcelas.length === 0)
-      return acc + (!d.pago ? (d.valorTotal ?? 0) : 0)
-    return acc + d.listaParcelas
-      .filter(p => {
-        const dv = new Date(p.dataVencimento + 'T12:00:00')
-        return !p.pago && dv.getMonth() === mesAtual && dv.getFullYear() === anoAtual
-      })
-      .reduce((s, p) => s + p.valor, 0)
-  }, 0)
-
-  // Soma da parte do usuário nas despesas rateadas aceitas no mês
-  const totalMesRateio = rateiosAceitos
-  .filter(d => !d.pago)
-  .reduce((acc, d) => {
-    // Se parcelado, usa valorDevidoParcela; se à vista, valorDevido
-    return acc + meuValorRateioMes(d)
-  }, 0)
-
- const totalMesAtual = totalMesProprio + totalMesRateio
-
- const totalRestanteProprio = despesas.reduce((acc, d) => {
-  if (d.pago) return acc
-  if (!d.listaParcelas || d.listaParcelas.length === 0) return acc + (d.valorTotal ?? 0)
-  return acc + d.listaParcelas.filter(p => !p.pago).reduce((s, p) => s + p.valor, 0)
-}, 0)
-
-  const totalRestanteRateio = rateiosAceitos
-    .filter(d => !d.pago)
-    .reduce((acc, d) => acc + meuValorRateio(d), 0)
-
-  const totalRestanteFuturo = totalRestanteProprio + totalRestanteRateio
-
-  const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   const parcelaObj = selecionada?.listaParcelas?.find((p) => p.numero === parcelaSelecionada)
   const totalPagoParcela = parcelaObj?.pagamentos?.reduce((s, p) => s + p.valor, 0) ?? 0
   const valorRestanteParcela = (parcelaObj?.valor ?? 0) - totalPagoParcela
@@ -155,47 +110,24 @@ export default function DespesasPage() {
 
   return (
     <div className="despesas-page">
-      <div className="resumo-cards">
-        <div className="resumo-card principal">
-          <span className="resumo-label">Total para pagar no mês</span>
-          <span className="resumo-valor">{fmt(totalMesAtual)}</span>
-          <div className="resumo-indicador">Vence em breve</div>
-        </div>
-
-
-        <div className="resumo-card secundario">
-          <span className="resumo-label">Despesas próprias</span>
-          <span className="resumo-valor">{fmt(totalMesProprio)}</span>
-          <div className="resumo-status">Próprias</div>
-        </div>
-
-        <div className="resumo-card secundario">
-          <span className="resumo-label">Saldo devedor total</span>
-          <span className="resumo-valor">{fmt(totalRestanteFuturo)}</span>
-          <div className="resumo-status">Compromissos futuros</div>
-        </div>
-
-
-        <div className="resumo-card secundario">
-          <span className="resumo-label">Despesas rateadas</span>
-          <span className="resumo-valor">{fmt(totalMesRateio)}</span>
-          <div className="resumo-status">Rateados</div>
-        </div>
-       
-
-      </div>
-
       {/* Header com Filtros e Notificação */}
       <div className="page-header">
         <div className="filtros">
-          {(['todas', 'rateados', 'pendentes', 'pagas', 'rateados-pendente'] as const).map((f) => (
+          {([
+            { id: 'pendentes', label: 'Pendentes' },
+            { id: 'parcialmente-pagas', label: 'Parc. pagas' },
+            { id: 'rateados', label: 'Rateados' },
+            { id: 'rateados-pendente', label: 'Rateados pend.' },
+            { id: 'pagas', label: 'Pagas' },
+            { id: 'todas', label: 'Todas' },
+          ] as const).map(({ id, label }) => (
             <button
-              key={f}
-              className={`filtro-btn ${filtro === f ? 'active' : ''}`}
-              onClick={() => setFiltro(f)}
+              key={id}
+              className={`filtro-btn ${filtro === id ? 'active' : ''}`}
+              onClick={() => setFiltro(id)}
             >
-              {f === 'rateados-pendente' ? 'Rateados pendentes' : f.charAt(0).toUpperCase() + f.slice(1)}
-              {f === 'rateados-pendente' && rateiosPendentes.length > 0 && (
+              {label}
+              {id === 'rateados-pendente' && rateiosPendentes.length > 0 && (
                 <span className="notification-badge">{rateiosPendentes.length}</span>
               )}
             </button>
@@ -204,12 +136,32 @@ export default function DespesasPage() {
         <button className="btn-criar" onClick={() => setModal('criar')}>+ Nova</button>
       </div>
 
+      {/* Despesas pagas por amigo para mim — pendentes de aprovação */}
+      {despesasCompartilhadas.filter(d => d.statusCompartilhamento === 'pendente').map((d) => (
+        <div key={d.id} className="compartilhado-banner">
+          <div className="comp-left">
+            <span className="comp-icon"><CreditCard size={22} /></span>
+            <div>
+              <span className="comp-titulo">{d.nome}</span>
+              <span className="comp-sub">
+                Pago no cartão por {d.userId} · {d.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                {d.parcelas > 1 ? ` · ${d.parcelas}x` : ''}
+              </span>
+            </div>
+          </div>
+          <div className="comp-acoes">
+            <button className="comp-aceitar" onClick={() => responderCompartilhamento(d.id, 'aceito')}>Aceitar</button>
+            <button className="comp-recusar" onClick={() => responderCompartilhamento(d.id, 'recusado')}>Recusar</button>
+          </div>
+        </div>
+      ))}
+
       {/* Listagem de Despesas */}
       {loading ? (
         <div className="estado-vazio">Carregando...</div>
       ) : despesasExibidas.length === 0 ? (
         <div className="estado-vazio">
-          <p>Nenhuma despesa {filtro !== 'todas' ? (filtro === 'rateados-pendente' ? 'pendente de aprovação' : filtro) : 'registrada'}</p>
+          <p>Nenhuma despesa {filtro === 'todas' ? 'registrada' : filtro === 'rateados-pendente' ? 'pendente de aprovação' : filtro === 'parcialmente-pagas' ? 'parcialmente paga' : filtro}</p>
           {filtro === 'todas' && (
             <button className="btn-criar-vazio" onClick={() => setModal('criar')}>Criar primeira despesa</button>
           )}
@@ -220,16 +172,20 @@ export default function DespesasPage() {
             {despesasExibidas.slice(pagina * ITENS_POR_PAGINA, (pagina + 1) * ITENS_POR_PAGINA).map((d) => {
               const ehRateioPendente = rateiosPendentes.some((r) => r.id === d.id)
               const ehRateioAceito = rateiosAceitos.some((r) => r.id === d.id)
+              const cartao = cartoes.find(c => c.id === d.cartaoId)
+              const cartaoLabel = cartao ? `${cartao.nome} · ${cartao.banco}` : undefined
               return (
                 <DespesaCard
                   key={d.id}
                   despesa={d}
+                  cartaoLabel={cartaoLabel}
                   isRateadosPendente={ehRateioPendente}
                   isRateioAceito={ehRateioAceito}
                   meuUserId={user?.uid}
                   onEditar={() => { setSelecionada(d); setModal('editar') }}
                   onRemover={() => handleRemover(d)}
                   onPagarParcela={(num) => abrirPagarParcela(d, num)}
+                  onRemoverPagamento={(num, pgId) => removerPagamento(d.id, num, pgId)}
                   onAdiantar={() => { setSelecionada(d); setModal('adiantar') }}
                   onAceitarRateio={(renda) => responderRateio(d.id, d, user!.uid, 'aceito', renda)}
                   onRecusarRateio={() => responderRateio(d.id, d, user!.uid, 'recusado')}
@@ -255,12 +211,12 @@ export default function DespesasPage() {
       {/* Modais */}
       {modal === 'criar' && (
         <Modal titulo="Nova despesa" onFechar={fecharModal}>
-          <DespesaForm amigos={amigos} onSalvar={handleCriar} onCancelar={fecharModal} />
+          <DespesaForm amigos={amigos} cartoes={cartoes} onSalvar={handleCriar} onCancelar={fecharModal} />
         </Modal>
       )}
       {modal === 'editar' && selecionada && (
         <Modal titulo="Editar despesa" onFechar={fecharModal}>
-          <DespesaForm amigos={amigos} inicial={selecionada} onSalvar={handleEditar} onCancelar={fecharModal} />
+          <DespesaForm amigos={amigos} cartoes={cartoes} inicial={selecionada} onSalvar={handleEditar} onCancelar={fecharModal} />
         </Modal>
       )}
       {modal === 'pagar' && selecionada && parcelaObj && (
@@ -292,19 +248,14 @@ export default function DespesasPage() {
 
       <style>{`
         .despesas-page { display: flex; flex-direction: column; gap: 1.5rem; }
-        .resumo-cards { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 1rem; }
-        .resumo-card {
-          background: #FFFFFF; border: 1px solid #F1F2F6; border-radius: 16px;
-          padding: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+        @media (max-width: 600px) {
+          .page-header { flex-wrap: wrap; }
+          .filtros { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+          .filtros::-webkit-scrollbar { display: none; }
+          .compartilhado-banner { flex-direction: column; align-items: flex-start; }
+          .comp-acoes { width: 100%; }
+          .comp-aceitar, .comp-recusar { flex: 1; text-align: center; }
         }
-        .resumo-card.principal { border-left: 4px solid #C8A45A; }
-        .resumo-card.secundario { background: #F8F9FA; border: 1px dashed #E0E0E0; }
-        .resumo-label { color: #88929b; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; }
-        .resumo-valor { color: #2d3436; font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; }
-        .resumo-card.secundario .resumo-valor { font-size: 1.1rem; color: #636e72; }
-        .resumo-indicador { margin-top: 0.8rem; font-size: 0.6rem; font-weight: 600; padding: 4px 8px; border-radius: 6px; width: fit-content; background: rgba(200,164,90,0.1); color: #C8A45A; }
-        .resumo-status { margin-top: 0.8rem; font-size: 0.6rem; font-weight: 600; padding: 4px 8px; border-radius: 6px; width: fit-content; background: #DFE6ED; color: #718093; }
 
         .page-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
         .filtros { display: flex; gap: 0.5rem; background: #F1F2F6; padding: 0.3rem; border-radius: 12px; }
@@ -326,6 +277,29 @@ export default function DespesasPage() {
           padding: 0.7rem 1.2rem; font-size: 0.85rem; font-weight: 600;
           cursor: pointer; box-shadow: 0 4px 12px rgba(200,164,90,0.25);
         }
+
+        .compartilhado-banner {
+          display: flex; align-items: center; justify-content: space-between;
+          background: #FFFDF7; border: 1.5px solid rgba(200,164,90,0.3);
+          border-radius: 14px; padding: 1rem 1.1rem; gap: 1rem;
+        }
+        .comp-left { display: flex; align-items: center; gap: 0.85rem; flex: 1; min-width: 0; }
+        .comp-icon { display: flex; align-items: center; color: #C8A45A; flex-shrink: 0; }
+        .comp-titulo { display: block; color: #2D3436; font-size: 0.9rem; font-weight: 700; }
+        .comp-sub { display: block; color: #95A5A6; font-size: 0.75rem; margin-top: 0.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .comp-acoes { display: flex; gap: 0.5rem; flex-shrink: 0; }
+        .comp-aceitar {
+          background: rgba(39,174,96,0.1); color: #27AE60; border: none;
+          border-radius: 8px; padding: 0.5rem 0.9rem; font-size: 0.8rem; font-weight: 700;
+          cursor: pointer; transition: background 0.15s; font-family: inherit;
+        }
+        .comp-aceitar:hover { background: rgba(39,174,96,0.2); }
+        .comp-recusar {
+          background: rgba(231,76,60,0.08); color: #E74C3C; border: none;
+          border-radius: 8px; padding: 0.5rem 0.9rem; font-size: 0.8rem; font-weight: 700;
+          cursor: pointer; transition: background 0.15s; font-family: inherit;
+        }
+        .comp-recusar:hover { background: rgba(231,76,60,0.15); }
 
         .despesas-list { display: flex; flex-direction: column; gap: 0.75rem; }
 

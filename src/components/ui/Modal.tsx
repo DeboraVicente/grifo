@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { ReactNode } from 'react'
+import { X } from 'lucide-react'
 
 interface Props {
   titulo: string
@@ -19,7 +20,7 @@ export default function Modal({ titulo, onFechar, children }: Props) {
       <div className="modal-box">
         <div className="modal-header">
           <h2 className="modal-titulo">{titulo}</h2>
-          <button className="modal-close" onClick={onFechar}>✕</button>
+          <button className="modal-close" onClick={onFechar}><X size={14} /></button>
         </div>
         <div className="modal-body">{children}</div>
       </div>
@@ -87,7 +88,6 @@ export default function Modal({ titulo, onFechar, children }: Props) {
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 0.8rem;
         cursor: pointer;
         transition: all 0.2s;
       }

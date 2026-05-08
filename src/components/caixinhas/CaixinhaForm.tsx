@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import type { Caixinha, CaixinhaForm as CaixinhaFormType, CaixinhaCategoria } from '../../types'
 
-const CATEGORIAS: { value: CaixinhaCategoria; label: string; emoji: string }[] = [
-  { value: 'emergencia', label: 'Emergência', emoji: '🆘' },
-  { value: 'viagem', label: 'Viagem', emoji: '✈️' },
-  { value: 'educacao', label: 'Educação', emoji: '📚' },
-  { value: 'saude', label: 'Saúde', emoji: '❤️' },
-  { value: 'reforma', label: 'Reforma', emoji: '🔧' },
-  { value: 'eletronicos', label: 'Eletrônicos', emoji: '📱' },
-  { value: 'outros', label: 'Outros', emoji: '📦' },
+const CATEGORIAS: { value: CaixinhaCategoria; label: string }[] = [
+  { value: 'emergencia', label: 'Emergência' },
+  { value: 'viagem', label: 'Viagem' },
+  { value: 'educacao', label: 'Educação' },
+  { value: 'saude', label: 'Saúde' },
+  { value: 'reforma', label: 'Reforma' },
+  { value: 'eletronicos', label: 'Eletrônicos' },
+  { value: 'outros', label: 'Outros' },
 ]
 
 interface Props {
@@ -87,16 +87,6 @@ export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
             outline: none; transition: border-color 0.2s; font-family: inherit;
           }
           .field input:focus { border-color: #C8A45A; }
-          .categoria-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; }
-          .categoria-btn {
-            display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
-            padding: 0.5rem 0.3rem; background: #111; border: 1px solid #2a2a2a;
-            border-radius: 8px; color: #666; font-size: 0.72rem; cursor: pointer;
-            transition: all 0.15s; font-family: inherit;
-          }
-          .categoria-btn span:first-child { font-size: 1.1rem; }
-          .categoria-btn:hover { border-color: #444; color: #aaa; }
-          .categoria-btn.active { border-color: #C8A45A; color: #C8A45A; background: rgba(200,164,90,0.08); }
           .checkbox-label {
             display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
             color: #aaa !important; font-size: 0.88rem !important;
