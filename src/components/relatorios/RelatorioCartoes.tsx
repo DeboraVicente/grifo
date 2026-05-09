@@ -10,7 +10,9 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 
 function calcularComprometido(despesa: Despesa): number {
   if (despesa.pago) return 0
-  if (despesa.parcelas > 1) return despesa.valorParcela ?? 0
+  if (despesa.parcelas > 1) {
+    return despesa.listaParcelas.filter(p => !p.pago).reduce((s, p) => s + p.valor, 0)
+  }
   return despesa.valorTotal ?? 0
 }
 

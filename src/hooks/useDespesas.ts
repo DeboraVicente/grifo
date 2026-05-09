@@ -11,9 +11,16 @@ import {
   doc,
   serverTimestamp,
   Timestamp,
+  writeBatch,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import type { Despesa, DespesaForm, Pagamento, Parcela } from '../types'
+
+function avancarMes(dateStr: string, meses: number): string {
+  const [ano, mes, dia] = dateStr.split('-').map(Number)
+  const d = new Date(ano, mes - 1 + meses, dia)
+  return d.toISOString().split('T')[0]
+}
 
 // Gera lista de parcelas a partir do form
 function gerarParcelas(valorTotal: number, qtd: number, dataInicial: string, valorParcelaOverride?: number): Parcela[] {
@@ -76,21 +83,13 @@ export function useDespesas(userId: string | undefined) {
     const valorParcela = form.valorParcelaCustom
       ? parseFloat(form.valorParcelaCustom.toFixed(2))
       : parseFloat((form.valorTotal / form.parcelas).toFixed(2))
-    const listaParcelas = gerarParcelas(form.valorTotal, form.parcelas, form.data, form.valorParcelaCustom)
 
-    // Extrai participantes independente do tipo TS (evita problema com union type)
     const rateioRaw = form.rateio as any
     const participantesIds: string[] = rateioRaw?.ativo === true
       ? (rateioRaw.participantes ?? []).map((p: any) => p.userId)
       : []
 
-    console.log('[Grifo] Criando despesa com rateio:', {
-      rateioAtivo: rateioRaw?.ativo,
-      participantesIds,
-      rateio: rateioRaw,
-    })
-
-    await addDoc(collection(db, 'despesas'), {
+    const baseDoc = {
       nome: form.nome,
       categoria: form.categoria,
       metodoPagamento: form.metodoPagamento,
@@ -105,18 +104,45 @@ export function useDespesas(userId: string | undefined) {
       valorTotal: form.valorTotal,
       valorParcela,
       saldoDevedor: form.tipo === 'financiamento' ? form.valorTotal : null,
-      dataCompra: form.dataCompra || null,
-      data: form.data,
       observacoes: form.observacoes,
       rateio: rateioRaw,
-      listaParcelas,
       adiantamentos: [],
       pago: false,
       rateioParticipantesIds: participantesIds,
       userId,
-      criadoEm: serverTimestamp(),
-      atualizadoEm: serverTimestamp(),
-    })
+    }
+
+    if (form.recorrente) {
+      const meses = form.recorrenciaMeses ?? 12
+      const recorrenciaId = crypto.randomUUID()
+      const batch = writeBatch(db)
+      for (let i = 0; i < meses; i++) {
+        const data = avancarMes(form.data, i)
+        const dataCompra = avancarMes(form.dataCompra || form.data, i)
+        const listaParcelas = gerarParcelas(form.valorTotal, 1, data)
+        batch.set(doc(collection(db, 'despesas')), {
+          ...baseDoc,
+          data,
+          dataCompra,
+          listaParcelas,
+          recorrente: true,
+          recorrenciaId,
+          criadoEm: serverTimestamp(),
+          atualizadoEm: serverTimestamp(),
+        })
+      }
+      await batch.commit()
+    } else {
+      const listaParcelas = gerarParcelas(form.valorTotal, form.parcelas, form.data, form.valorParcelaCustom)
+      await addDoc(collection(db, 'despesas'), {
+        ...baseDoc,
+        dataCompra: form.dataCompra || null,
+        data: form.data,
+        listaParcelas,
+        criadoEm: serverTimestamp(),
+        atualizadoEm: serverTimestamp(),
+      })
+    }
   }
 
   const editar = async (id: string, form: Partial<DespesaForm>) => {

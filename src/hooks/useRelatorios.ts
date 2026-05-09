@@ -183,25 +183,28 @@ export interface ParcelamentoDado {
   ultimaParcela: string | null
 }
 
+
+
 export function calcControleParcelamentos(despesas: Despesa[]): ParcelamentoDado[] {
   return despesas
     .filter((d) => d.parcelas > 1 && !d.pago)
     .map((d) => {
-      const pagas = d.listaParcelas.filter((p) => p.pago).length
-      const naopagas = d.listaParcelas.filter((p) => !p.pago)
-      const totalRestante = d.tipo === 'financiamento'
-        ? (d.saldoDevedor ?? naopagas.reduce((s, p) => s + p.valor, 0))
-        : naopagas.reduce((s, p) => s + p.valor, 0)
-      const ordenadas = [...naopagas].sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento))
+      const naopagas = d.listaParcelas?.filter((p) => !p.pago) || [];
+      const ordenadas = [...naopagas].sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento));
+      
+      const valorExibicao = d.tipo === 'financiamento' 
+        ? (d.valorParcela || (ordenadas[0]?.valor ?? 0))
+        : naopagas.reduce((s, p) => s + p.valor, 0);
+
       return {
         id: d.id,
         nome: d.nome,
         categoria: d.categoria,
         parcelasTotal: d.parcelas,
-        parcelasPagas: pagas,
+        parcelasPagas: d.listaParcelas?.filter((p) => p.pago).length ?? 0,
         parcelasRestantes: naopagas.length,
-        valorParcela: d.valorParcela,
-        totalRestante,
+        valorParcela: d.valorParcela || (ordenadas[0]?.valor ?? 0),
+        totalRestante: valorExibicao, // <--- Aqui aplicamos a sua regra
         proxVencimento: ordenadas[0]?.dataVencimento ?? null,
         ultimaParcela: ordenadas[ordenadas.length - 1]?.dataVencimento ?? null,
       }

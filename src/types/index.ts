@@ -72,6 +72,8 @@ export interface Despesa {
   listaParcelas: Parcela[]
   adiantamentos: Pagamento[]
   rateio: Rateio
+  recorrente?: boolean
+  recorrenciaId?: string
   userId: string
   criadoEm: string
   atualizadoEm: string
@@ -93,6 +95,8 @@ export interface DespesaForm {
   data: string
   observacoes: string
   rateio: Rateio
+  recorrente?: boolean
+  recorrenciaMeses?: number
 }
 
 export type CaixinhaCategoria =

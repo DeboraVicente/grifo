@@ -60,7 +60,6 @@ export default function RelatorioCategoria({ despesas, rateiosRecebidos, userId,
         {dados.map((d, i) => (
           <div key={d.categoria} className="cat-row">
             <div className="cat-nome">
-              <span className="cat-dot" style={{ background: CORES[i % CORES.length] }} />
               <CategoryIcon categoria={d.categoria as Categoria} size={15} color={CORES[i % CORES.length]} />
               <span>{d.categoria.charAt(0).toUpperCase() + d.categoria.slice(1)}</span>
             </div>
@@ -76,7 +75,6 @@ export default function RelatorioCategoria({ despesas, rateiosRecebidos, userId,
         .cat-header { display: grid; grid-template-columns: 1fr auto auto; gap: 1rem; padding: 0 0.75rem; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #95A5A6; }
         .cat-row { display: grid; grid-template-columns: 1fr auto auto; gap: 1rem; align-items: center; padding: 0.65rem 0.75rem; background: #F8F9FA; border-radius: 10px; }
         .cat-nome { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
-        .cat-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
         .cat-valor { font-size: 0.85rem; font-weight: 700; color: #2D3436; }
         .cat-pct { font-size: 0.8rem; font-weight: 600; color: #95A5A6; min-width: 36px; text-align: right; }
       `}</style>

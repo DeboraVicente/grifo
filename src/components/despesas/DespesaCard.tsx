@@ -63,6 +63,10 @@ export default function DespesaCard({
   const isFinanciamento = despesa.tipo === 'financiamento'
   const saldoAtual = isFinanciamento ? (despesa.saldoDevedor ?? valorTotal) : valorTotal
 
+  const restante = totalParcelas > 1 && !isFinanciamento && !despesa.pago
+    ? (despesa.listaParcelas?.filter(p => !p.pago).reduce((s, p) => s + p.valor, 0) ?? 0)
+    : 0
+
   const temRateio = despesa.rateio?.ativo
   const participantesRateio = temRateio ? (despesa.rateio as any).participantes ?? [] : []
 
@@ -128,6 +132,10 @@ export default function DespesaCard({
               <><span className="dot">·</span>
                 <span className="tag-financiamento">financiamento</span></>
             )}
+            {despesa.recorrente && (
+              <><span className="dot">·</span>
+                <span className="tag-recorrente">recorrente</span></>
+            )}
           </div>
         </div>
 
@@ -142,6 +150,9 @@ export default function DespesaCard({
           ) : (
             <>
               <span className={despesa.pago ? 'riscado' : ''}>{fmt(saldoAtual)}</span>
+              {totalParcelas > 1 && !despesa.pago && !isFinanciamento && (
+                <span className="valor-restante">{fmt(restante)} restante</span>
+              )}
               {totalParcelas > 1 && !despesa.pago && (
                 <span className="valor-parcela">{fmt(valorParcela)}/mês</span>
               )}
@@ -412,11 +423,13 @@ export default function DespesaCard({
       .tag-aprovacao-pendente { color: #3498DB; font-weight: 700; }
       .tag-rateio-aceito { display: inline-flex; align-items: center; gap: 3px; }
       .tag-financiamento { color: #C8A45A; font-weight: 700; font-size: 0.68rem; background: rgba(200,164,90,0.1); border-radius: 4px; padding: 1px 5px; }
+      .tag-recorrente { color: #8E44AD; font-weight: 700; font-size: 0.68rem; background: rgba(142,68,173,0.08); border-radius: 4px; padding: 1px 5px; }
       .badge-pago { display: inline-flex; align-items: center; gap: 3px; font-size: 0.68rem; font-weight: 700; color: #2ECC71; margin-top: 2px; }
 
       .card-valor { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
       .valor-minha-parte { color: #2D3436; font-size: 1rem; font-weight: 800; }
       .valor-total-rateio { font-size: 0.68rem; color: #95A5A6; }
+      .valor-restante { font-size: 0.7rem; color: #C8A45A; font-weight: 700; }
       .valor-parcela { font-size: 0.7rem; color: #95A5A6; }
       .riscado { text-decoration: line-through; color: #95A5A6; }
       .rateio-aceito-valor { display: inline-flex; align-items: center; gap: 4px; }

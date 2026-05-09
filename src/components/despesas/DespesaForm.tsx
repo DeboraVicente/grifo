@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarDays, Handshake, User, Users, Scale, Banknote, Check } from 'lucide-react'
+import { CalendarDays, Handshake, User, Users, Scale, Banknote, Check, RefreshCw } from 'lucide-react'
 import type { Despesa, DespesaForm as DespesaFormType, Categoria, MetodoPagamento, CartaoCredito } from '../../types'
 
 const CATEGORIAS: { value: Categoria; label: string }[] = [
@@ -59,6 +59,8 @@ export default function DespesaForm({ inicial, amigos, cartoes, onSalvar, onCanc
   const [loading, setLoading] = useState(false)
 
   const [paraAmigoAtivo, setParaAmigoAtivo] = useState(!!inicial?.paraAmigoId)
+  const [recorrenteAtivo, setRecorrenteAtivo] = useState(inicial?.recorrente ?? false)
+  const [recorrenciaMeses, setRecorrenciaMeses] = useState(12)
 
   // Estado local do rateio
   const [rateioAtivo, setRateioAtivo] = useState(inicial?.rateio?.ativo ?? false)
@@ -142,7 +144,12 @@ export default function DespesaForm({ inicial, amigos, cartoes, onSalvar, onCanc
 
       console.log('[Grifo] handleSubmit estado:', { rateioAtivo, participantesCount: participantes.length, participantes, amigos })
       console.log('[Grifo] handleSubmit rateio montado:', JSON.stringify(rateio, null, 2))
-      await onSalvar({ ...form, rateio })
+      await onSalvar({
+        ...form,
+        rateio,
+        recorrente: recorrenteAtivo || undefined,
+        recorrenciaMeses: recorrenteAtivo ? recorrenciaMeses : undefined,
+      })
     } finally {
       setLoading(false)
     }
@@ -336,6 +343,49 @@ export default function DespesaForm({ inicial, amigos, cartoes, onSalvar, onCanc
                 <span>{form.parcelas}x de <strong>{fmt(valorParcela)}</strong> — total {fmt(form.valorTotal)}</span>
               )}
             </div>
+          </div>
+        )}
+
+        {!isFinanciamento && form.parcelas === 1 && !inicial?.recorrente && (
+          <div className="field full">
+            <button
+              type="button"
+              className={`rateio-toggle-header ${recorrenteAtivo ? 'ativo' : ''}`}
+              onClick={() => setRecorrenteAtivo((v) => !v)}
+            >
+              <div className="rateio-header-left">
+                <span className="rateio-icon"><RefreshCw size={20} /></span>
+                <div>
+                  <span className="rateio-header-titulo">Despesa recorrente</span>
+                  <span className="rateio-header-sub">
+                    {recorrenteAtivo
+                      ? `${recorrenciaMeses} meses · ${new Date(form.data + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })} até ${new Date(new Date(form.data + 'T12:00:00').setMonth(new Date(form.data + 'T12:00:00').getMonth() + recorrenciaMeses - 1)).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })}`
+                      : 'Repete todo mês automaticamente'}
+                  </span>
+                </div>
+              </div>
+              <div className={`rateio-toggle-pill ${recorrenteAtivo ? 'on' : 'off'}`}>
+                <div className="rateio-toggle-dot" />
+              </div>
+            </button>
+
+            {recorrenteAtivo && (
+              <div className="recorrente-box">
+                <span className="recorrente-label">Duração</span>
+                <div className="recorrente-opcoes">
+                  {[6, 12, 24].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      className={`recorrente-opt ${recorrenciaMeses === m ? 'ativo' : ''}`}
+                      onClick={() => setRecorrenciaMeses(m)}
+                    >
+                      {m} meses
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -803,6 +853,13 @@ export default function DespesaForm({ inicial, amigos, cartoes, onSalvar, onCanc
           color: #95A5A6; font-size: 0.82rem;
         }
         .cartao-vazio strong { color: #C8A45A; }
+
+        .recorrente-box { background: #F8F9FA; border: 1px solid #F1F2F6; border-radius: 12px; padding: 0.85rem 1rem; margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; }
+        .recorrente-label { color: #95A5A6; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+        .recorrente-opcoes { display: flex; gap: 0.5rem; }
+        .recorrente-opt { flex: 1; background: #fff; border: 1px solid #E0E0E0; border-radius: 8px; padding: 0.5rem; font-size: 0.8rem; font-weight: 600; color: #636E72; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+        .recorrente-opt.ativo { background: rgba(142,68,173,0.08); border-color: rgba(142,68,173,0.3); color: #8E44AD; }
+        .recorrente-opt:hover:not(.ativo) { background: #F1F2F6; }
 
         .amigo-email-sm { color: #95A5A6; font-size: 0.72rem; }
         .amigo-aviso {
