@@ -136,43 +136,25 @@ export default function RelatoriosPage() {
         .rel-despesa { color: #E74C3C; }
         .rel-poupanca { color: #2ECC71; }
 
-        .mes-seletor { 
-          display: flex; 
-          align-items: center; 
-          gap: 0.5rem; 
-          background: #FFFFFF; 
-          border: 1px solid #F1F2F6; 
-          border-radius: 12px; 
-          padding: 0.4rem 0.8rem;
+        .mes-seletor {
+          display: flex; align-items: center; gap: 0.5rem;
+          background: #FFFFFF; border: 1px solid #F1F2F6;
+          border-radius: 12px; padding: 0.35rem 0.75rem;
           box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-          position: relative;
-          transition: all 0.3s ease;
         }
-        .mes-seletor.desabilitado { 
-          opacity: 0.5; 
-          background: #F8F9FA; 
-          filter: grayscale(1);
-          cursor: not-allowed;
+        .mes-seletor.desabilitado { opacity: 0.45; pointer-events: none; }
+        .mes-nav {
+          display: flex; align-items: center; justify-content: center;
+          width: 28px; height: 28px; border-radius: 8px;
+          border: none; background: #F8F9FA;
+          color: #C8A45A; cursor: pointer; font-size: 1.1rem;
+          transition: background 0.15s;
         }
-        .mes-nav { 
-          background: #F8F9FA; 
-          border: none; 
-          width: 28px; 
-          height: 28px; 
-          border-radius: 8px; 
-          color: #C8A45A; 
-          cursor: pointer; 
-          font-size: 1.2rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .mes-label { 
-          font-size: 0.85rem; 
-          font-weight: 200; 
-          color: #2D3436; 
-          min-width: 85px; 
-          text-align: center; 
+        .mes-nav:hover:not(:disabled) { background: #F1F2F6; }
+        .mes-nav:disabled { opacity: 0.4; cursor: not-allowed; }
+        .mes-label {
+          font-size: 0.85rem; font-weight: 600; color: #2D3436;
+          min-width: 90px; text-align: center;
         }
 
         .rel-abas-scroll { margin: 0 -1.25rem; padding: 0 1.25rem; overflow-x: auto; scrollbar-width: none; }        .rel-abas-scroll::-webkit-scrollbar { display: none; }

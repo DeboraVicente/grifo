@@ -1,24 +1,15 @@
-import { useState } from 'react'
-import { ChevronLeft, ChevronRight, ArrowUp } from 'lucide-react'
+import { ArrowUp } from 'lucide-react'
 import type { Caixinha } from '../../types'
 import CategoryIcon from '../ui/CategoryIcon'
 
 interface Props {
   caixinhas: Caixinha[]
+  ano: number
+  mes: number
   onDepositar: (caixinha: Caixinha) => void
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-
-function mesAnterior(ano: number, mes: number) {
-  if (mes === 1) return { ano: ano - 1, mes: 12 }
-  return { ano, mes: mes - 1 }
-}
-
-function mesProximo(ano: number, mes: number) {
-  if (mes === 12) return { ano: ano + 1, mes: 1 }
-  return { ano, mes: mes + 1 }
-}
 
 function chave(ano: number, mes: number) {
   return `${ano}-${String(mes).padStart(2, '0')}`
@@ -31,35 +22,14 @@ function investidoNomes(caixinha: Caixinha, ano: number, mes: number): number {
     .reduce((acc, m) => acc + m.valor, 0)
 }
 
-const MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+const hoje = new Date()
 
-export default function MetasInvestimento({ caixinhas, onDepositar }: Props) {
-  const hoje = new Date()
-  const [ano, setAno] = useState(hoje.getFullYear())
-  const [mes, setMes] = useState(hoje.getMonth() + 1)
-
+export default function MetasInvestimento({ caixinhas, ano, mes, onDepositar }: Props) {
   const ehMesAtual = ano === hoje.getFullYear() && mes === hoje.getMonth() + 1
-
-  const irAnterior = () => {
-    const prev = mesAnterior(ano, mes)
-    setAno(prev.ano); setMes(prev.mes)
-  }
-  const irProximo = () => {
-    const next = mesProximo(ano, mes)
-    setAno(next.ano); setMes(next.mes)
-  }
-
   const caixinhasComMeta = caixinhas.filter((c) => c.metaMensal)
 
   return (
     <div className="metas-wrapper">
-      <div className="metas-nav">
-        <button className="nav-btn" onClick={irAnterior}><ChevronLeft size={18} /></button>
-        <span className="nav-label">{MESES_PT[mes - 1]} {ano}</span>
-        <button className="nav-btn" onClick={irProximo} disabled={ehMesAtual}><ChevronRight size={18} /></button>
-      </div>
-
       {caixinhasComMeta.length === 0 ? (
         <div className="metas-vazio">
           Nenhuma caixinha com aporte mensal definido.<br />
@@ -146,19 +116,6 @@ export default function MetasInvestimento({ caixinhas, onDepositar }: Props) {
       <style>{`
         .metas-wrapper { display: flex; flex-direction: column; gap: 1rem; }
 
-        .metas-nav {
-          display: flex; align-items: center; gap: 1rem;
-          align-self: flex-start;
-        }
-        .nav-btn {
-          display: flex; align-items: center; justify-content: center;
-          width: 32px; height: 32px;
-          background: #F8F9FA; border: 1px solid #F1F2F6; border-radius: 8px;
-          cursor: pointer; transition: all 0.15s; color: #636E72;
-        }
-        .nav-btn:hover:not(:disabled) { background: #EDEEF0; border-color: #D5D8DC; }
-        .nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-        .nav-label { font-size: 0.95rem; font-weight: 700; color: #2D3436; min-width: 160px; text-align: center; }
 
         .metas-vazio {
           text-align: center; color: #95A5A6; font-size: 0.88rem;

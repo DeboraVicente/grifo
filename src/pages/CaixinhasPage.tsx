@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { PiggyBank, LayoutGrid, TableProperties } from 'lucide-react'
+import { PiggyBank, LayoutGrid, TableProperties, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useCaixinhas } from '../hooks/useCaixinhas'
 import { useAuthContext } from '../lib/AuthContext'
 import CaixinhaCard from '../components/caixinhas/CaixinhaCard'
@@ -12,13 +12,28 @@ import type { Caixinha, CaixinhaForm as CaixinhaFormType } from '../types'
 type ModalTipo = 'criar' | 'editar' | 'depositar' | 'retirar' | 'rendimento' | null
 type Visualizacao = 'cards' | 'metas'
 
+const MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+
 export default function CaixinhasPage() {
   const { user } = useAuthContext()
   const { caixinhas, loading, criar, editar, remover, adicionarMovimento } = useCaixinhas(user?.uid)
 
+  const hoje = new Date()
   const [modal, setModal] = useState<ModalTipo>(null)
   const [selecionada, setSelecionada] = useState<Caixinha | null>(null)
   const [visualizacao, setVisualizacao] = useState<Visualizacao>('metas')
+  const [ano, setAno] = useState(hoje.getFullYear())
+  const [mes, setMes] = useState(hoje.getMonth() + 1)
+
+  const ehMesAtual = ano === hoje.getFullYear() && mes === hoje.getMonth() + 1
+
+  const irAnterior = () => {
+    if (mes === 1) { setAno(a => a - 1); setMes(12) } else setMes(m => m - 1)
+  }
+  const irProximo = () => {
+    if (mes === 12) { setAno(a => a + 1); setMes(1) } else setMes(m => m + 1)
+  }
 
   const fecharModal = () => { setModal(null); setSelecionada(null) }
 
@@ -41,32 +56,37 @@ export default function CaixinhasPage() {
 
   return (
     <div className="caixinhas-page">
-      <div className="page-header">
-        <div>
-          <h1 className="page-titulo">Caixinhas</h1>
-          <p className="page-subtitulo">Organize seus objetivos de poupança</p>
-        </div>
-        <div className="header-acoes">
-          <div className="toggle-view">
-            <button
-              className={`toggle-btn ${visualizacao === 'cards' ? 'ativo' : ''}`}
-              onClick={() => setVisualizacao('cards')}
-              title="Ver cards"
-            >
-              <LayoutGrid size={16} />
-            </button>
-            <button
-              className={`toggle-btn ${visualizacao === 'metas' ? 'ativo' : ''}`}
-              onClick={() => setVisualizacao('metas')}
-              title="Metas de investimento"
-            >
-              <TableProperties size={16} />
-            </button>
+
+      {/* Linha 1: Título + nav mês (metas) + toggle */}
+      <div className="ph-row1">
+        <h1 className="page-titulo">Caixinhas</h1>
+
+        {visualizacao === 'metas' && (
+          <div className="mes-nav">
+            <button className="nav-btn" onClick={irAnterior}><ChevronLeft size={16} /></button>
+            <span className="nav-label">{MESES_PT[mes - 1]} {ano}</span>
+            <button className="nav-btn" onClick={irProximo} disabled={ehMesAtual}><ChevronRight size={16} /></button>
           </div>
-          <button className="btn-criar" onClick={() => setModal('criar')}>+ Nova</button>
+        )}
+
+        <div className="toggle-view">
+          <button className={`toggle-btn ${visualizacao === 'cards' ? 'ativo' : ''}`}
+            onClick={() => setVisualizacao('cards')} title="Ver cards">
+            <LayoutGrid size={16} />
+          </button>
+          <button className={`toggle-btn ${visualizacao === 'metas' ? 'ativo' : ''}`}
+            onClick={() => setVisualizacao('metas')} title="Metas de investimento">
+            <TableProperties size={16} />
+          </button>
         </div>
       </div>
 
+      {/* Linha 2: Nova */}
+      <div className="ph-row2">
+        <button className="btn-criar" onClick={() => setModal('criar')}>+ Nova</button>
+      </div>
+
+      {/* Conteúdo */}
       {loading ? (
         <div className="estado-vazio">Carregando...</div>
       ) : caixinhas.length === 0 ? (
@@ -78,6 +98,8 @@ export default function CaixinhasPage() {
       ) : visualizacao === 'metas' ? (
         <MetasInvestimento
           caixinhas={caixinhas}
+          ano={ano}
+          mes={mes}
           onDepositar={(c) => { setSelecionada(c); setModal('depositar') }}
         />
       ) : (
@@ -126,58 +148,74 @@ export default function CaixinhasPage() {
         </Modal>
       )}
 
-    <style>{`
-      .caixinhas-page { display: flex; flex-direction: column; gap: 1.5rem; }
+      <style>{`
+        .caixinhas-page { display: flex; flex-direction: column; gap: 1rem; }
 
-      .page-header { display: flex; align-items: flex-start; justify-content: space-between; }
-      .page-titulo { font-size: 1.4rem; font-weight: 900; color: #2D3436; }
-      .page-subtitulo { font-size: 0.8rem; color: #95A5A6; margin-top: 2px; }
+        /* Linha 1 */
+        .ph-row1 { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+        .page-titulo { font-size: 1.4rem; font-weight: 900; color: #2D3436; flex: 1; }
 
-      .header-acoes { display: flex; align-items: center; gap: 0.75rem; }
+        .mes-nav {
+          display: flex; align-items: center; gap: 0.5rem;
+          background: #FFFFFF; border: 1px solid #F1F2F6;
+          border-radius: 12px; padding: 0.35rem 0.75rem;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .nav-btn {
+          display: flex; align-items: center; justify-content: center;
+          width: 28px; height: 28px; border-radius: 8px;
+          border: none; background: #F8F9FA;
+          color: #C8A45A; cursor: pointer; font-size: 1.1rem;
+          transition: background 0.15s;
+        }
+        .nav-btn:hover:not(:disabled) { background: #F1F2F6; }
+        .nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .nav-label { font-size: 0.85rem; font-weight: 600; color: #2D3436; min-width: 110px; text-align: center; }
 
-      .toggle-view {
-        display: flex; align-items: center;
-        background: #F8F9FA; border: 1px solid #F1F2F6;
-        border-radius: 10px; padding: 3px; gap: 2px;
-      }
-      .toggle-btn {
-        display: flex; align-items: center; justify-content: center;
-        width: 32px; height: 32px; border-radius: 7px;
-        border: none; background: transparent; color: #95A5A6;
-        cursor: pointer; transition: all 0.15s;
-      }
-      .toggle-btn:hover { color: #636E72; }
-      .toggle-btn.ativo { background: #FFFFFF; color: #2D3436; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .toggle-view {
+          display: flex; align-items: center;
+          background: #F8F9FA; border: 1px solid #F1F2F6;
+          border-radius: 10px; padding: 3px; gap: 2px;
+        }
+        .toggle-btn {
+          display: flex; align-items: center; justify-content: center;
+          width: 30px; height: 30px; border-radius: 7px;
+          border: none; background: transparent; color: #95A5A6;
+          cursor: pointer; transition: all 0.15s;
+        }
+        .toggle-btn:hover { color: #636E72; }
+        .toggle-btn.ativo { background: #FFFFFF; color: #2D3436; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 
-      .btn-criar {
-        background: #C8A45A; color: #FFFFFF; border: none; border-radius: 12px;
-        padding: 0.7rem 1.2rem; font-size: 0.85rem; font-weight: 700; cursor: pointer;
-        box-shadow: 0 4px 12px rgba(200,164,90,0.25); transition: all 0.2s ease;
-        white-space: nowrap; font-family: inherit;
-      }
-      .btn-criar:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(200,164,90,0.35); }
+        /* Linha 2 */
+        .ph-row2 { display: flex; justify-content: flex-end; }
 
-      .caixinhas-list { display: flex; flex-direction: column; gap: 1rem; }
+        .btn-criar {
+          background: #C8A45A; color: #FFFFFF; border: none; border-radius: 12px;
+          padding: 0.6rem 1.1rem; font-size: 0.85rem; font-weight: 700; cursor: pointer;
+          box-shadow: 0 4px 12px rgba(200,164,90,0.25); transition: all 0.2s ease;
+          white-space: nowrap; font-family: inherit;
+        }
+        .btn-criar:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(200,164,90,0.35); }
 
-      .estado-vazio {
-        display: flex; flex-direction: column; align-items: center;
-        gap: 1rem; padding: 4rem 1rem; color: #BDC3C7; text-align: center;
-      }
-      .estado-vazio span { font-size: 3rem; opacity: 0.5; }
+        .caixinhas-list { display: flex; flex-direction: column; gap: 1rem; }
 
-      .btn-criar-vazio {
-        background: #FFFFFF; border: 1px dashed #D1D8E0; color: #95A5A6;
-        border-radius: 12px; padding: 0.8rem 1.5rem; font-size: 0.85rem; font-weight: 600;
-        cursor: pointer; margin-top: 0.5rem; transition: all 0.2s; font-family: inherit;
-      }
-      .btn-criar-vazio:hover { border-color: #C8A45A; color: #C8A45A; background: #FFFDF7; }
+        .estado-vazio {
+          display: flex; flex-direction: column; align-items: center;
+          gap: 1rem; padding: 4rem 1rem; color: #BDC3C7; text-align: center;
+        }
 
-      @media (max-width: 600px) {
-        .caixinhas-page { gap: 1rem; }
-        .page-header { flex-direction: column; gap: 0.75rem; }
-        .btn-criar { width: 100%; text-align: center; }
-      }
-    `}</style>
+        .btn-criar-vazio {
+          background: #FFFFFF; border: 1px dashed #D1D8E0; color: #95A5A6;
+          border-radius: 12px; padding: 0.8rem 1.5rem; font-size: 0.85rem; font-weight: 600;
+          cursor: pointer; transition: all 0.2s; font-family: inherit;
+        }
+        .btn-criar-vazio:hover { border-color: #C8A45A; color: #C8A45A; background: #FFFDF7; }
+
+        @media (max-width: 600px) {
+          .ph-row1 { gap: 0.5rem; }
+          .nav-label { min-width: 100px; font-size: 0.82rem; }
+        }
+      `}</style>
     </div>
   )
 }

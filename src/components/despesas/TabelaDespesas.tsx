@@ -1,18 +1,21 @@
 import { useState, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, CheckCircle2, Clock, ChevronUp, ChevronDown, ChevronsUpDown, X } from 'lucide-react'
+import { CheckCircle2, Clock, ChevronUp, ChevronDown, ChevronsUpDown, X } from 'lucide-react'
 import type { Despesa, CartaoCredito, Conta } from '../../types'
 import CategoryIcon from '../ui/CategoryIcon'
+
+export type TabTipo = 'tudo' | 'recorrentes' | 'parcelados' | 'compartilhados'
+type ColOrdem = 'descricao' | 'conta' | 'metodo' | 'tipo' | 'vencimento' | 'status' | 'valor'
+type DirOrdem = 'asc' | 'desc'
 
 interface Props {
   despesas: Despesa[]
   cartoes: CartaoCredito[]
   contas: Conta[]
+  ano: number
+  mes: number
+  tab: TabTipo
   onPagarParcela: (despesa: Despesa, numeroParcela: number) => void
 }
-
-type TabTipo = 'tudo' | 'recorrentes' | 'parcelados' | 'compartilhados'
-type ColOrdem = 'descricao' | 'conta' | 'metodo' | 'tipo' | 'vencimento' | 'status' | 'valor'
-type DirOrdem = 'asc' | 'desc'
 
 interface Filtros {
   status: 'todos' | 'pago' | 'pendente'
@@ -24,16 +27,6 @@ interface Filtros {
 const FILTROS_VAZIOS: Filtros = { status: 'todos', tipo: 'todos', metodo: 'todos', conta: 'todos' }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-
-const MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-
-function mesAnterior(ano: number, mes: number) {
-  return mes === 1 ? { ano: ano - 1, mes: 12 } : { ano, mes: mes - 1 }
-}
-function mesProximo(ano: number, mes: number) {
-  return mes === 12 ? { ano: ano + 1, mes: 1 } : { ano, mes: mes + 1 }
-}
 
 interface Linha {
   despesa: Despesa
@@ -56,32 +49,14 @@ function IconeOrdem({ col, ordemCol, ordemDir }: { col: ColOrdem; ordemCol: ColO
   return ordemDir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />
 }
 
-export default function TabelaDespesas({ despesas, cartoes, contas, onPagarParcela }: Props) {
-  const hoje = new Date()
-  const [ano, setAno] = useState(hoje.getFullYear())
-  const [mes, setMes] = useState(hoje.getMonth() + 1)
-  const [tab, setTab] = useState<TabTipo>('tudo')
+export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, tab, onPagarParcela }: Props) {
   const [pagina, setPagina] = useState(0)
   const [ordemCol, setOrdemCol] = useState<ColOrdem>('status')
   const [ordemDir, setOrdemDir] = useState<DirOrdem>('asc')
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_VAZIOS)
 
-  const maxVencimento = useMemo(() => {
-    let maxAno = hoje.getFullYear()
-    let maxMes = hoje.getMonth() + 1
-    for (const d of despesas) {
-      for (const p of d.listaParcelas ?? []) {
-        const [a, m] = p.dataVencimento.split('-').map(Number)
-        if (a > maxAno || (a === maxAno && m > maxMes)) { maxAno = a; maxMes = m }
-      }
-    }
-    return { ano: maxAno, mes: maxMes }
-  }, [despesas])
-
-  const ehUltimoMes = ano === maxVencimento.ano && mes === maxVencimento.mes
-
-  const irAnterior = () => { const p = mesAnterior(ano, mes); setAno(p.ano); setMes(p.mes); setPagina(0) }
-  const irProximo = () => { const p = mesProximo(ano, mes); setAno(p.ano); setMes(p.mes); setPagina(0) }
+  // Reset página quando mês ou tab mudam
+  useMemo(() => { setPagina(0) }, [mes, ano, tab])
 
   const toggleOrdem = (col: ColOrdem) => {
     if (ordemCol === col) setOrdemDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -182,28 +157,6 @@ export default function TabelaDespesas({ despesas, cartoes, contas, onPagarParce
 
   return (
     <div className="tabela-wrapper">
-      {/* Cabeçalho: nav mês + tabs */}
-      <div className="tabela-topo">
-        <div className="mes-nav">
-          <button className="nav-btn" onClick={irAnterior}><ChevronLeft size={18} /></button>
-          <span className="nav-label">{MESES_PT[mes - 1]} {ano}</span>
-          <button className="nav-btn" onClick={irProximo} disabled={ehUltimoMes}><ChevronRight size={18} /></button>
-        </div>
-        <div className="tabs-row">
-          {([
-            { id: 'tudo', label: 'Tudo' },
-            { id: 'recorrentes', label: 'Recorrentes' },
-            { id: 'parcelados', label: 'Parcelados' },
-            { id: 'compartilhados', label: 'Compartilhados' },
-          ] as const).map(({ id, label }) => (
-            <button key={id} className={`tab-btn ${tab === id ? 'ativo' : ''}`}
-              onClick={() => { setTab(id); setPagina(0) }}>
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Filtros */}
       <div className="filtros-row">
         <select className="filtro-select" value={filtros.status} onChange={e => setFiltro('status', e.target.value as Filtros['status'])}>
@@ -246,7 +199,7 @@ export default function TabelaDespesas({ despesas, cartoes, contas, onPagarParce
       {linhasOrdenadas.length === 0 ? (
         <div className="tabela-vazio">
           {todasLinhas.length === 0
-            ? `Nenhum lançamento em ${MESES_PT[mes - 1]} ${ano}.`
+            ? `Nenhum lançamento neste mês.`
             : 'Nenhum resultado para os filtros selecionados.'}
         </div>
       ) : (
@@ -360,25 +313,6 @@ export default function TabelaDespesas({ despesas, cartoes, contas, onPagarParce
       <style>{`
         .tabela-wrapper { display: flex; flex-direction: column; gap: 1rem; }
 
-        .tabela-topo { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; }
-
-        .mes-nav { display: flex; align-items: center; gap: 0.75rem; }
-        .nav-btn {
-          display: flex; align-items: center; justify-content: center;
-          width: 32px; height: 32px; background: #F8F9FA; border: 1px solid #F1F2F6;
-          border-radius: 8px; cursor: pointer; color: #636E72; transition: all 0.15s;
-        }
-        .nav-btn:hover:not(:disabled) { background: #EDEEF0; border-color: #D5D8DC; }
-        .nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-        .nav-label { font-size: 0.95rem; font-weight: 700; color: #2D3436; min-width: 160px; text-align: center; }
-
-        .tabs-row { display: flex; gap: 0; background: #F1F2F6; padding: 0.3rem; border-radius: 12px; }
-        .tab-btn {
-          padding: 0.5rem 1rem; border: none; border-radius: 9px;
-          font-size: 0.78rem; font-weight: 600; cursor: pointer;
-          background: transparent; color: #7F8C8D; transition: all 0.2s; font-family: inherit; white-space: nowrap;
-        }
-        .tab-btn.ativo { background: #FFFFFF; color: #C8A45A; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
 
         /* Filtros */
         .filtros-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
@@ -489,11 +423,9 @@ export default function TabelaDespesas({ despesas, cartoes, contas, onPagarParce
           .tabela th.col-tipo, .tabela td.col-tipo,
           .tabela th.col-metodo, .tabela td.col-metodo,
           .tabela th.col-conta, .tabela td.col-conta { display: none; }
-          .tabs-row { overflow-x: auto; }
           .filtros-row { overflow-x: auto; flex-wrap: nowrap; }
           .subtotais { gap: 0.75rem; }
           .subtotal-item.destaque { padding-left: 0.75rem; }
-          .tabela-topo { flex-direction: column; align-items: flex-start; }
         }
       `}</style>
     </div>
