@@ -4,15 +4,14 @@ import { calcForecastGastos, fmt } from '../../hooks/useRelatorios'
 
 interface Props {
   despesas: Despesa[]
-  rateiosRecebidos: Despesa[]
   receitas: Receita[]
   userId: string
   mes: number
   ano: number
 }
 
-export default function ForecastGastos({ despesas, rateiosRecebidos, receitas, userId }: Props) {
-  const dados = calcForecastGastos(despesas, rateiosRecebidos, receitas, userId, 6)
+export default function ForecastGastos({ despesas, receitas, userId }: Props) {
+  const dados = calcForecastGastos(despesas, receitas, userId, 6)
 
   const chartData = dados.map((d) => ({
     nome: d.label,

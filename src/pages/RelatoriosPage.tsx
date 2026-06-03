@@ -1,17 +1,15 @@
 import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  ArrowUpDown, FolderOpen, CalendarDays, Users, TrendingUp, Lightbulb, LineChart, CreditCard,
+  ArrowUpDown, FolderOpen, CalendarDays, TrendingUp, Lightbulb, LineChart, CreditCard,
 } from 'lucide-react'
 import { useDespesas } from '../hooks/useDespesas'
-import { useRateioRecebido } from '../hooks/useRateio'
 import { useReceitas } from '../hooks/useReceitas'
 import { useCartoes } from '../hooks/useCartoes'
 import { useAuthContext } from '../lib/AuthContext'
 import FluxoCaixaMensal from '../components/relatorios/FluxoCaixaMensal'
 import RelatorioCategoria from '../components/relatorios/RelatorioCategoria'
 import ControleParcelamentos from '../components/relatorios/ControleParcelamentos'
-import ControleRateio from '../components/relatorios/ControleRateio'
 import ForecastGastos from '../components/relatorios/ForecastGastos'
 import QuantoPossoGastar from '../components/relatorios/QuantoPossoGastar'
 import EvolucaoFinanceira from '../components/relatorios/EvolucaoFinanceira'
@@ -21,7 +19,6 @@ type RelatorioTipo =
   | 'fluxo'
   | 'categorias'
   | 'parcelamentos'
-  | 'rateios'
   | 'forecast'
   | 'saldo-livre'
   | 'evolucao'
@@ -31,7 +28,6 @@ const ABAS: { id: RelatorioTipo; label: string; Icon: LucideIcon }[] = [
   { id: 'fluxo', label: 'Fluxo Mensal', Icon: ArrowUpDown },
   { id: 'categorias', label: 'Categorias', Icon: FolderOpen },
   { id: 'parcelamentos', label: 'Parcelamentos', Icon: CalendarDays },
-  { id: 'rateios', label: 'Rateios', Icon: Users },
   { id: 'cartoes', label: 'Cartões', Icon: CreditCard },
   { id: 'forecast', label: 'Previsão', Icon: TrendingUp },
   { id: 'saldo-livre', label: 'Saldo Livre', Icon: Lightbulb },
@@ -44,7 +40,6 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 export default function RelatoriosPage() {
   const { user } = useAuthContext()
   const { despesas } = useDespesas(user?.uid)
-  const { despesasRateadas } = useRateioRecebido(user?.uid)
   const { receitas } = useReceitas(user?.uid)
   const { cartoes } = useCartoes(user?.uid)
 
@@ -70,9 +65,9 @@ export default function RelatoriosPage() {
     return !d.pago && d.data?.startsWith(mesStr) ? total + d.valorTotal : total
   }, 0)
 
-  const isTemporal = !['parcelamentos', 'rateios', 'forecast', 'evolucao', 'cartoes'].includes(abaAtiva);
+  const isTemporal = !['parcelamentos', 'forecast', 'evolucao', 'cartoes'].includes(abaAtiva);
 
-  const relatorioProps = { despesas, rateiosRecebidos: despesasRateadas, receitas, userId: user?.uid ?? '', mes, ano }
+  const relatorioProps = { despesas, receitas, userId: user?.uid ?? '', mes, ano }
 
   return (
     <div className="rel-page">
@@ -126,7 +121,6 @@ export default function RelatoriosPage() {
         {abaAtiva === 'fluxo' && <FluxoCaixaMensal {...relatorioProps} />}
         {abaAtiva === 'categorias' && <RelatorioCategoria {...relatorioProps} />}
         {abaAtiva === 'parcelamentos' && <ControleParcelamentos {...relatorioProps} />}
-        {abaAtiva === 'rateios' && <ControleRateio {...relatorioProps} />}
         {abaAtiva === 'forecast' && <ForecastGastos {...relatorioProps} />}
         {abaAtiva === 'saldo-livre' && <QuantoPossoGastar {...relatorioProps} />}
         {abaAtiva === 'evolucao' && <EvolucaoFinanceira {...relatorioProps} />}

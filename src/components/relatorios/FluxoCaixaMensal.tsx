@@ -4,7 +4,6 @@ import { calcFluxoCaixaMensal, fmt } from '../../hooks/useRelatorios'
 
 interface Props {
   despesas: Despesa[]
-  rateiosRecebidos: Despesa[]
   receitas: Receita[]
   userId: string
   mes: number
@@ -14,8 +13,8 @@ interface Props {
 const fmtDia = (data: string) =>
   new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 
-export default function FluxoCaixaMensal({ despesas, rateiosRecebidos, receitas, userId, mes, ano }: Props) {
-  const dados = calcFluxoCaixaMensal(despesas, rateiosRecebidos, receitas, userId, mes, ano)
+export default function FluxoCaixaMensal({ despesas, receitas, userId, mes, ano }: Props) {
+  const dados = calcFluxoCaixaMensal(despesas, receitas, userId, mes, ano)
   const saldoPositivo = dados.saldo >= 0
 
   const chartData = dados.timeline.map((d) => ({

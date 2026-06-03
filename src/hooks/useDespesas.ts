@@ -16,6 +16,8 @@ import {
 import { db } from '../lib/firebase'
 import type { Despesa, DespesaForm, Pagamento, Parcela } from '../types'
 
+
+
 function avancarMes(dateStr: string, meses: number): string {
   const [ano, mes, dia] = dateStr.split('-').map(Number)
   const d = new Date(ano, mes - 1 + meses, dia)
@@ -67,6 +69,7 @@ export function useDespesas(userId: string | undefined) {
           valorParcela,
           listaParcelas,
           adiantamentos: raw.adiantamentos ?? [],
+          tipoGasto: raw.tipoGasto ?? (raw.recorrente ? 'fixo' : 'variavel'),
           criadoEm: (raw.criadoEm as Timestamp)?.toDate().toISOString() ?? '',
           atualizadoEm: (raw.atualizadoEm as Timestamp)?.toDate().toISOString() ?? '',
         }
@@ -84,31 +87,22 @@ export function useDespesas(userId: string | undefined) {
       ? parseFloat(form.valorParcelaCustom.toFixed(2))
       : parseFloat((form.valorTotal / form.parcelas).toFixed(2))
 
-    const rateioRaw = form.rateio as any
-    const participantesIds: string[] = rateioRaw?.ativo === true
-      ? (rateioRaw.participantes ?? []).map((p: any) => p.userId)
-      : []
-
     const baseDoc = {
       nome: form.nome,
       categoria: form.categoria,
       metodoPagamento: form.metodoPagamento,
+      tipoGasto: form.recorrente ? 'fixo' : (form.tipoGasto ?? 'variavel'),
       cartaoId: form.cartaoId ?? null,
-      paraAmigoId: form.paraAmigoId ?? null,
-      paraAmigoNome: form.paraAmigoNome ?? null,
-      paraAmigoEmail: form.paraAmigoEmail ?? null,
-      statusCompartilhamento: form.paraAmigoId ? 'pendente' : null,
-      compartilhadoComIds: form.paraAmigoId ? [form.paraAmigoId] : [],
+      contaId: form.contaId ?? null,
       tipo: form.tipo ?? 'padrao',
       parcelas: form.parcelas,
       valorTotal: form.valorTotal,
       valorParcela,
+      minhaParte: form.minhaParte ?? null,
       saldoDevedor: form.tipo === 'financiamento' ? form.valorTotal : null,
       observacoes: form.observacoes,
-      rateio: rateioRaw,
       adiantamentos: [],
       pago: false,
-      rateioParticipantesIds: participantesIds,
       userId,
     }
 
@@ -201,18 +195,9 @@ export function useDespesas(userId: string | undefined) {
 
     const todasParcelasPagas = listaParcelas.every((p) => p.pago)
 
-    // Para rateios, a despesa só é paga quando todos os participantes aceitos também quitaram
-    const rateioRaw = despesa.rateio as any
-    let participantesQuitados = true
-    if (rateioRaw?.ativo === true) {
-      participantesQuitados = (rateioRaw.participantes ?? [])
-        .filter((p: any) => p.status === 'aceito')
-        .every((p: any) => (p.valorPago ?? 0) >= p.valorDevido)
-    }
-
     await updateDoc(doc(db, 'despesas', despesaId), {
       listaParcelas,
-      pago: todasParcelasPagas && participantesQuitados,
+      pago: todasParcelasPagas,
       atualizadoEm: serverTimestamp(),
     })
   }

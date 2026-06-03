@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { PiggyBank } from 'lucide-react'
+import { PiggyBank, LayoutGrid, TableProperties } from 'lucide-react'
 import { useCaixinhas } from '../hooks/useCaixinhas'
 import { useAuthContext } from '../lib/AuthContext'
 import CaixinhaCard from '../components/caixinhas/CaixinhaCard'
 import CaixinhaForm from '../components/caixinhas/CaixinhaForm'
+import MetasInvestimento from '../components/caixinhas/MetasInvestimento'
 import PagamentoForm from '../components/despesas/PagamentoForm'
 import Modal from '../components/ui/Modal'
 import type { Caixinha, CaixinhaForm as CaixinhaFormType } from '../types'
 
 type ModalTipo = 'criar' | 'editar' | 'depositar' | 'retirar' | 'rendimento' | null
+type Visualizacao = 'cards' | 'metas'
 
 export default function CaixinhasPage() {
   const { user } = useAuthContext()
@@ -16,6 +18,7 @@ export default function CaixinhasPage() {
 
   const [modal, setModal] = useState<ModalTipo>(null)
   const [selecionada, setSelecionada] = useState<Caixinha | null>(null)
+  const [visualizacao, setVisualizacao] = useState<Visualizacao>('metas')
 
   const fecharModal = () => { setModal(null); setSelecionada(null) }
 
@@ -43,7 +46,25 @@ export default function CaixinhasPage() {
           <h1 className="page-titulo">Caixinhas</h1>
           <p className="page-subtitulo">Organize seus objetivos de poupança</p>
         </div>
-        <button className="btn-criar" onClick={() => setModal('criar')}>+ Nova</button>
+        <div className="header-acoes">
+          <div className="toggle-view">
+            <button
+              className={`toggle-btn ${visualizacao === 'cards' ? 'ativo' : ''}`}
+              onClick={() => setVisualizacao('cards')}
+              title="Ver cards"
+            >
+              <LayoutGrid size={16} />
+            </button>
+            <button
+              className={`toggle-btn ${visualizacao === 'metas' ? 'ativo' : ''}`}
+              onClick={() => setVisualizacao('metas')}
+              title="Metas de investimento"
+            >
+              <TableProperties size={16} />
+            </button>
+          </div>
+          <button className="btn-criar" onClick={() => setModal('criar')}>+ Nova</button>
+        </div>
       </div>
 
       {loading ? (
@@ -54,6 +75,11 @@ export default function CaixinhasPage() {
           <p>Nenhuma caixinha criada</p>
           <button className="btn-criar-vazio" onClick={() => setModal('criar')}>Criar primeira caixinha</button>
         </div>
+      ) : visualizacao === 'metas' ? (
+        <MetasInvestimento
+          caixinhas={caixinhas}
+          onDepositar={(c) => { setSelecionada(c); setModal('depositar') }}
+        />
       ) : (
         <div className="caixinhas-list">
           {caixinhas.map((c) => (
@@ -106,6 +132,22 @@ export default function CaixinhasPage() {
       .page-header { display: flex; align-items: flex-start; justify-content: space-between; }
       .page-titulo { font-size: 1.4rem; font-weight: 900; color: #2D3436; }
       .page-subtitulo { font-size: 0.8rem; color: #95A5A6; margin-top: 2px; }
+
+      .header-acoes { display: flex; align-items: center; gap: 0.75rem; }
+
+      .toggle-view {
+        display: flex; align-items: center;
+        background: #F8F9FA; border: 1px solid #F1F2F6;
+        border-radius: 10px; padding: 3px; gap: 2px;
+      }
+      .toggle-btn {
+        display: flex; align-items: center; justify-content: center;
+        width: 32px; height: 32px; border-radius: 7px;
+        border: none; background: transparent; color: #95A5A6;
+        cursor: pointer; transition: all 0.15s;
+      }
+      .toggle-btn:hover { color: #636E72; }
+      .toggle-btn.ativo { background: #FFFFFF; color: #2D3436; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 
       .btn-criar {
         background: #C8A45A; color: #FFFFFF; border: none; border-radius: 12px;

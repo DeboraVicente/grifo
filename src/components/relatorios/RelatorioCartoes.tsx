@@ -30,16 +30,9 @@ export default function RelatorioCartoes({ despesas, cartoes }: Props) {
     const despesasCartao = despesas.filter(
       (d) => d.cartaoId === cartao.id && d.metodoPagamento === 'credito' && !d.pago
     )
-    const proprias = despesasCartao.filter(
-      (d) => !d.paraAmigoId || d.statusCompartilhamento === 'aceito'
-    )
-    const pendentesAmigo = despesasCartao.filter(
-      (d) => d.paraAmigoId && d.statusCompartilhamento === 'pendente'
-    )
-
-    const comprometidoProprio = proprias.reduce((s, d) => s + calcularComprometido(d), 0)
-    const comprometidoPendente = pendentesAmigo.reduce((s, d) => s + calcularComprometido(d), 0)
-    const comprometidoTotal = comprometidoProprio + comprometidoPendente
+    const comprometidoTotal = despesasCartao.reduce((s, d) => s + calcularComprometido(d), 0)
+    const comprometidoPendente = 0
+    const pendentesAmigo: typeof despesasCartao = []
 
     const limite = cartao.limite ?? 0
     const disponivel = limite > 0 ? Math.max(0, limite - comprometidoTotal) : null
@@ -55,7 +48,7 @@ export default function RelatorioCartoes({ despesas, cartoes }: Props) {
           <div className="rc-cartao-header">
             <div className="rc-cartao-info">
               <span className="rc-cartao-nome">{cartao.nome}</span>
-              <span className="rc-cartao-banco">{cartao.banco}{cartao.bandeira ? ` · ${cartao.bandeira.toUpperCase()}` : ''}</span>
+              <span className="rc-cartao-banco">{cartao.bandeira ? cartao.bandeira.toUpperCase() : 'Cartão de Crédito'}</span>
             </div>
             <CreditCard size={24} className="rc-emoji" />
           </div>

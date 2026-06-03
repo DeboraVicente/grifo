@@ -25,6 +25,14 @@
       ]
     },
     {
+      "collectionGroup": "contas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "nome", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "cartoes",
       "queryScope": "COLLECTION",
       "fields": [

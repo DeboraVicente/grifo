@@ -5,16 +5,15 @@ import { calcEvolucaoFinanceira, fmt } from '../../hooks/useRelatorios'
 
 interface Props {
   despesas: Despesa[]
-  rateiosRecebidos: Despesa[]
   receitas: Receita[]
   userId: string
   mes: number
   ano: number
 }
 
-export default function EvolucaoFinanceira({ despesas, rateiosRecebidos, receitas, userId }: Props) {
+export default function EvolucaoFinanceira({ despesas, receitas, userId }: Props) {
   const [periodo, setPeriodo] = useState<3 | 6 | 12>(6)
-  const dados = calcEvolucaoFinanceira(despesas, rateiosRecebidos, receitas, userId, periodo)
+  const dados = calcEvolucaoFinanceira(despesas, receitas, userId, periodo)
 
   const chartData = dados.map((d) => ({
     nome: d.label,

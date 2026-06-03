@@ -9,29 +9,44 @@ export type Categoria =
   | 'lazer'
   | 'outros'
 
-export type MetodoPagamento = 'debito' | 'credito' | 'pix' | 'dinheiro'
+export type MetodoPagamento = 'debito' | 'credito' | 'pix' | 'boleto' | 'dinheiro'
 
 export type BandeiraCartao = 'visa' | 'mastercard' | 'elo' | 'amex' | 'hipercard' | 'outros'
+
+export type TipoConta = 'corrente' | 'poupanca' | 'digital' | 'carteira'
+
+export interface Conta {
+  id: string
+  nome: string
+  tipo: TipoConta
+  userId: string
+  criadoEm: string
+}
+
+export interface ContaForm {
+  nome: string
+  tipo: TipoConta
+}
 
 export interface CartaoCredito {
   id: string
   nome: string
-  banco: string
   bandeira?: BandeiraCartao
   limite?: number
   diaVencimento?: number
   melhorDiaCompra?: number
+  contaId?: string
   userId: string
   criadoEm: string
 }
 
 export interface CartaoCreditoForm {
   nome: string
-  banco: string
   bandeira?: BandeiraCartao
   limite?: number
   diaVencimento?: number
   melhorDiaCompra?: number
+  contaId?: string
 }
 
 export interface Pagamento {
@@ -50,20 +65,21 @@ export interface Parcela {
   pagamentos: Pagamento[]
 }
 
+export type TipoGasto = 'fixo' | 'variavel'
+
 export interface Despesa {
   id: string
   nome: string
   categoria: Categoria
   metodoPagamento: MetodoPagamento
+  tipoGasto: TipoGasto
   cartaoId?: string
-  paraAmigoId?: string
-  paraAmigoNome?: string
-  paraAmigoEmail?: string
-  statusCompartilhamento?: 'pendente' | 'aceito' | 'recusado'
+  contaId?: string
   tipo?: 'padrao' | 'financiamento'
   parcelas: number
   valorTotal: number
   valorParcela: number
+  minhaParte?: number
   saldoDevedor?: number
   dataCompra?: string
   data: string
@@ -71,7 +87,6 @@ export interface Despesa {
   pago: boolean
   listaParcelas: Parcela[]
   adiantamentos: Pagamento[]
-  rateio: Rateio
   recorrente?: boolean
   recorrenciaId?: string
   userId: string
@@ -83,18 +98,17 @@ export interface DespesaForm {
   nome: string
   categoria: Categoria
   metodoPagamento: MetodoPagamento
+  tipoGasto: TipoGasto
   cartaoId?: string
-  paraAmigoId?: string
-  paraAmigoNome?: string
-  paraAmigoEmail?: string
+  contaId?: string
   tipo: 'padrao' | 'financiamento'
   parcelas: number
   valorTotal: number
   valorParcelaCustom?: number
+  minhaParte?: number
   dataCompra: string
   data: string
   observacoes: string
-  rateio: Rateio
   recorrente?: boolean
   recorrenciaMeses?: number
 }
@@ -121,6 +135,7 @@ export interface Caixinha {
   nome: string
   categoria: CaixinhaCategoria
   valorMeta?: number
+  metaMensal?: number
   valorAtual: number
   historico: MovimentoCaixinha[]
   userId: string
@@ -132,6 +147,7 @@ export interface CaixinhaForm {
   nome: string
   categoria: CaixinhaCategoria
   valorMeta?: number
+  metaMensal?: number
 }
 
 export type StatusAmizade = 'pendente' | 'aceita' | 'recusada'

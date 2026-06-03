@@ -33,17 +33,18 @@ export function useCartoes(userId: string | undefined) {
     const dados: Record<string, any> = { ...form, userId, criadoEm: serverTimestamp() }
     if (form.diaVencimento == null) delete dados.diaVencimento
     if (form.melhorDiaCompra == null) delete dados.melhorDiaCompra
+    if (form.contaId == null) delete dados.contaId
     await addDoc(collection(db, 'cartoes'), dados)
   }
 
   const editar = async (id: string, form: CartaoCreditoForm) => {
     await updateDoc(doc(db, 'cartoes', id), {
       nome: form.nome,
-      banco: form.banco,
       bandeira: form.bandeira ?? deleteField(),
       limite: form.limite ?? deleteField(),
       diaVencimento: form.diaVencimento ?? deleteField(),
       melhorDiaCompra: form.melhorDiaCompra ?? deleteField(),
+      contaId: form.contaId ?? deleteField(),
     })
   }
 

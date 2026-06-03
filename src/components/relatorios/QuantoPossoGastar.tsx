@@ -3,15 +3,14 @@ import { calcQuantoPossoGastar, fmt } from '../../hooks/useRelatorios'
 
 interface Props {
   despesas: Despesa[]
-  rateiosRecebidos: Despesa[]
   receitas: Receita[]
   userId: string
   mes: number
   ano: number
 }
 
-export default function QuantoPossoGastar({ despesas, rateiosRecebidos, receitas, userId, mes, ano }: Props) {
-  const dados = calcQuantoPossoGastar(despesas, rateiosRecebidos, receitas, userId, mes, ano)
+export default function QuantoPossoGastar({ despesas, receitas, userId, mes, ano }: Props) {
+  const dados = calcQuantoPossoGastar(despesas, receitas, userId, mes, ano)
 
   const disponivel = dados.disponivel
   const positivo = disponivel >= 0

@@ -4,7 +4,6 @@ import CategoryIcon from '../ui/CategoryIcon'
 
 interface Props {
   despesas: Despesa[]
-  rateiosRecebidos: Despesa[]
   receitas: Receita[]
   userId: string
   mes: number

@@ -45,6 +45,7 @@ export function useCaixinhas(userId: string | undefined) {
     await addDoc(collection(db, 'caixinhas'), {
       ...form,
       valorMeta: form.valorMeta ?? null,
+      metaMensal: form.metaMensal ?? null,
       valorAtual: 0,
       historico: [],
       userId,
@@ -57,6 +58,7 @@ export function useCaixinhas(userId: string | undefined) {
     await updateDoc(doc(db, 'caixinhas', id), {
       ...form,
       valorMeta: form.valorMeta ?? null,
+      metaMensal: form.metaMensal ?? null,
       atualizadoEm: serverTimestamp(),
     })
   }

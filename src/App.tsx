@@ -136,30 +136,32 @@ export default function App() {
           display: flex;
           justify-content: center;
         }
-        .header-content { width: 100%; max-width: 1200px; display: flex; justify-content: space-between; align-items: center; }
+        .header-content { width: 100%; max-width: 1400px; display: flex; justify-content: space-between; align-items: center; }
         .header-brand { display: flex; align-items: center; gap: 0.8rem; color: #C8A45A; font-weight: 800; font-size: 1.3rem; }
 
-        .main-layout { display: flex; width: 100%; max-width: 1200px; margin: 0 auto; flex: 1; }
+        .main-layout { display: flex; width: 100%; max-width: 1400px; margin: 0 auto; flex: 1; }
 
         /* Sidebar Desktop: Oculta por padrão (mobile) */
-        .sidebar-desktop { width: 240px; padding: 2rem 1rem; display: none; }
-        .side-nav { display: flex; flex-direction: column; gap: 0.5rem; }
+        .sidebar-desktop { width: 200px; flex-shrink: 0; padding: 1.5rem 1rem; display: none; }
+        .side-nav { display: flex; flex-direction: column; gap: 0.25rem; }
         .side-nav button {
           display: flex; align-items: center; gap: 0.65rem;
-          text-align: left; padding: 0.8rem 1rem; border: none; background: none;
+          text-align: left; padding: 0.75rem 1rem; border: none; background: none;
           border-radius: 12px; font-weight: 600; color: #95A5A6; cursor: pointer; width: 100%;
+          font-size: 0.88rem; font-family: inherit; transition: all 0.15s;
         }
+        .side-nav button:hover:not(.active) { background: #F8F9FA; color: #636E72; }
         .side-nav button.active { background: #FFFDF7; color: #C8A45A; }
+
         /* Dropdown Perfil */
         .dropdown-info { padding: 0.5rem; display: flex; flex-direction: column; margin-bottom: 4px; }
         .dropdown-info strong { font-size: 0.9rem; color: #2D3436; }
         .dropdown-info span { font-size: 0.75rem; color: #95A5A6; }
-        
         .perfil-dropdown hr { border: none; border-top: 1px solid #F1F2F6; margin: 4px 0; }
 
-        /* Main Content */
-        .app-main { flex: 1; padding: 2rem 1.25rem; padding-bottom: 100px; }
-        .content-limit { max-width: 800px; margin: 0 auto; }
+        /* Main Content — ocupa todo espaço restante */
+        .app-main { flex: 1; min-width: 0; padding: 1.5rem 2rem; padding-bottom: 100px; }
+        .content-limit { width: 100%; }
 
         /* Nav Mobile */
         .app-nav-mobile { 
@@ -181,11 +183,11 @@ export default function App() {
         .perfil-dropdown button { width: 100%; text-align: left; padding: 0.7rem; border: none; background: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
         .perfil-dropdown button:hover { background: #F8F9FA; }
 
-        /* RESPONSIVIDADE (A "mágica" do PWA) */
-        @media (min-width: 900px) {
+        /* RESPONSIVIDADE */
+        @media (min-width: 768px) {
           .sidebar-desktop { display: block; }
-          .app-nav-mobile { display: none; } /* Esconde nav de app no desktop */
-          .app-main { padding-bottom: 2rem; }
+          .app-nav-mobile { display: none; }
+          .app-main { padding-bottom: 1.5rem; }
         }
       `}</style>
     </div>

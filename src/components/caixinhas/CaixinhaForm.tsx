@@ -17,13 +17,14 @@ interface Props {
   onCancelar: () => void
 }
 
-const FORM_VAZIO: CaixinhaFormType = { nome: '', categoria: 'outros', valorMeta: undefined }
+const FORM_VAZIO: CaixinhaFormType = { nome: '', categoria: 'outros', valorMeta: undefined, metaMensal: undefined }
 
 export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
   const [form, setForm] = useState<CaixinhaFormType>(
-    inicial ? { nome: inicial.nome, categoria: inicial.categoria, valorMeta: inicial.valorMeta } : FORM_VAZIO
+    inicial ? { nome: inicial.nome, categoria: inicial.categoria, valorMeta: inicial.valorMeta, metaMensal: inicial.metaMensal } : FORM_VAZIO
   )
   const [temMeta, setTemMeta] = useState(!!inicial?.valorMeta)
+  const [temMetaMensal, setTemMetaMensal] = useState(!!inicial?.metaMensal)
   const [loading, setLoading] = useState(false)
 
   const set = (key: keyof CaixinhaFormType, value: any) => setForm((f) => ({ ...f, [key]: value }))
@@ -31,7 +32,7 @@ export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    try { await onSalvar({ ...form, valorMeta: temMeta ? form.valorMeta : undefined }) }
+    try { await onSalvar({ ...form, valorMeta: temMeta ? form.valorMeta : undefined, metaMensal: temMetaMensal ? form.metaMensal : undefined }) }
     finally { setLoading(false) }
   }
 
@@ -61,12 +62,25 @@ export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
         <label className="checkbox-label">
           <input type="checkbox" checked={temMeta}
             onChange={(e) => { setTemMeta(e.target.checked); if (!e.target.checked) set('valorMeta', undefined) }} />
-          <span>Definir valor meta</span>
+          <span>Definir valor meta total</span>
         </label>
         {temMeta && (
           <input type="number" min="0" step="0.01" placeholder="R$ 0,00"
             value={form.valorMeta || ''} style={{ marginTop: '0.5rem' }}
             onChange={(e) => set('valorMeta', parseFloat(e.target.value) || undefined)} />
+        )}
+      </div>
+
+      <div className="field">
+        <label className="checkbox-label">
+          <input type="checkbox" checked={temMetaMensal}
+            onChange={(e) => { setTemMetaMensal(e.target.checked); if (!e.target.checked) set('metaMensal', undefined) }} />
+          <span>Definir aporte mensal</span>
+        </label>
+        {temMetaMensal && (
+          <input type="number" min="0" step="0.01" placeholder="R$ 0,00"
+            value={form.metaMensal || ''} style={{ marginTop: '0.5rem' }}
+            onChange={(e) => set('metaMensal', parseFloat(e.target.value) || undefined)} />
         )}
       </div>
 

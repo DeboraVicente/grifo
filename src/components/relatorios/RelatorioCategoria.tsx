@@ -5,7 +5,6 @@ import CategoryIcon from '../ui/CategoryIcon'
 
 interface Props {
   despesas: Despesa[]
-  rateiosRecebidos: Despesa[]
   receitas: Receita[]
   userId: string
   mes: number
@@ -14,8 +13,8 @@ interface Props {
 
 const CORES = ['#C8A45A', '#E74C3C', '#3498DB', '#2ECC71', '#9B59B6', '#F39C12', '#1ABC9C', '#E67E22', '#95A5A6']
 
-export default function RelatorioCategoria({ despesas, rateiosRecebidos, userId, mes, ano }: Props) {
-  const dados = calcRelatorioPorCategoria(despesas, rateiosRecebidos, userId, mes, ano)
+export default function RelatorioCategoria({ despesas, userId, mes, ano }: Props) {
+  const dados = calcRelatorioPorCategoria(despesas, userId, mes, ano)
 
   const chartData = dados.map((d) => ({
     name: d.categoria.charAt(0).toUpperCase() + d.categoria.slice(1),
