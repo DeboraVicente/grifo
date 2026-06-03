@@ -164,36 +164,6 @@ export interface Amizade {
   criadoEm: string
 }
 
-export type StatusRateio = 'pendente' | 'aceito' | 'recusado'
-
-export type TipoRateioCalculo = 'pessoa' | 'renda'
-
-export interface ParticipanteRateio {
-  userId: string
-  nome: string
-  email: string
-  renda?: number
-  percentual: number
-  valorDevido: number
-  valorDevidoParcela?: number
-  valorPago: number
-  pagamentos: Pagamento[]
-  status: StatusRateio
-}
-
-export interface RateioAtivo {
-  ativo: true
-  tipo: TipoRateioCalculo
-  participantes: ParticipanteRateio[]
-  rendaCriador?: number
-}
-
-export interface RateioInativo {
-  ativo: false
-}
-
-export type Rateio = RateioAtivo | RateioInativo
-
 export type CategoriaReceita = 'salario' | 'freelance' | 'investimento' | 'outros'
 
 export interface Receita {

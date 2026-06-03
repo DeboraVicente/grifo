@@ -1,17 +1,17 @@
 import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  ArrowUpDown, FolderOpen, CalendarDays, TrendingUp, Lightbulb, LineChart, CreditCard,
+  ArrowUpDown, FolderOpen, CalendarDays, TrendingUp, LineChart, CreditCard,
 } from 'lucide-react'
 import { useDespesas } from '../hooks/useDespesas'
 import { useReceitas } from '../hooks/useReceitas'
 import { useCartoes } from '../hooks/useCartoes'
+import { useCaixinhas } from '../hooks/useCaixinhas'
 import { useAuthContext } from '../lib/AuthContext'
 import FluxoCaixaMensal from '../components/relatorios/FluxoCaixaMensal'
 import RelatorioCategoria from '../components/relatorios/RelatorioCategoria'
 import ControleParcelamentos from '../components/relatorios/ControleParcelamentos'
 import ForecastGastos from '../components/relatorios/ForecastGastos'
-import QuantoPossoGastar from '../components/relatorios/QuantoPossoGastar'
 import EvolucaoFinanceira from '../components/relatorios/EvolucaoFinanceira'
 import RelatorioCartoes from '../components/relatorios/RelatorioCartoes'
 
@@ -20,7 +20,6 @@ type RelatorioTipo =
   | 'categorias'
   | 'parcelamentos'
   | 'forecast'
-  | 'saldo-livre'
   | 'evolucao'
   | 'cartoes'
 
@@ -30,7 +29,6 @@ const ABAS: { id: RelatorioTipo; label: string; Icon: LucideIcon }[] = [
   { id: 'parcelamentos', label: 'Parcelamentos', Icon: CalendarDays },
   { id: 'cartoes', label: 'Cartões', Icon: CreditCard },
   { id: 'forecast', label: 'Previsão', Icon: TrendingUp },
-  { id: 'saldo-livre', label: 'Saldo Livre', Icon: Lightbulb },
   { id: 'evolucao', label: 'Evolução', Icon: LineChart },
 ]
 
@@ -42,6 +40,7 @@ export default function RelatoriosPage() {
   const { despesas } = useDespesas(user?.uid)
   const { receitas } = useReceitas(user?.uid)
   const { cartoes } = useCartoes(user?.uid)
+  const { caixinhas } = useCaixinhas(user?.uid)
 
 
   const hoje = new Date()
@@ -65,16 +64,15 @@ export default function RelatoriosPage() {
     return !d.pago && d.data?.startsWith(mesStr) ? total + d.valorTotal : total
   }, 0)
 
-  const isTemporal = !['parcelamentos', 'forecast', 'evolucao', 'cartoes'].includes(abaAtiva);
+  const isTemporal = !['parcelamentos', 'forecast', 'evolucao', 'cartoes'].includes(abaAtiva)
 
-  const relatorioProps = { despesas, receitas, userId: user?.uid ?? '', mes, ano }
+  const relatorioProps = { despesas, receitas, caixinhas, userId: user?.uid ?? '', mes, ano }
 
   return (
     <div className="rel-page">
       <div className="rel-header">
         <div>
           <h1 className="rel-titulo">Relatórios</h1>
-          <p className="rel-subtitulo">Visão completa das suas finanças</p>
         </div>
         <div className={`mes-seletor ${!isTemporal ? 'desabilitado' : ''}`}>
           <button className="mes-nav" onClick={() => isTemporal && navegarMes(-1)} disabled={!isTemporal}>‹</button>
@@ -83,19 +81,6 @@ export default function RelatoriosPage() {
         
         </div>
       </div>
-
-      {isTemporal && (
-        <div className="rel-resumo">
-          <div className="rel-resumo-item">
-            <span className="rel-resumo-label">
-              Despesa de {NOMES_MES[mes]}
-            </span>
-            <span className="rel-resumo-valor rel-despesa">
-              {fmt(totalMes)}
-            </span>
-          </div>
-        </div>
-      )}
       
       <div className="rel-abas-scroll">
         <div className="rel-abas">
@@ -122,7 +107,6 @@ export default function RelatoriosPage() {
         {abaAtiva === 'categorias' && <RelatorioCategoria {...relatorioProps} />}
         {abaAtiva === 'parcelamentos' && <ControleParcelamentos {...relatorioProps} />}
         {abaAtiva === 'forecast' && <ForecastGastos {...relatorioProps} />}
-        {abaAtiva === 'saldo-livre' && <QuantoPossoGastar {...relatorioProps} />}
         {abaAtiva === 'evolucao' && <EvolucaoFinanceira {...relatorioProps} />}
         {abaAtiva === 'cartoes' && <RelatorioCartoes despesas={despesas} cartoes={cartoes} />}
       </div>
@@ -138,7 +122,6 @@ export default function RelatoriosPage() {
           gap: 1rem;
         }
         .rel-titulo { font-size: 1.5rem; font-weight: 500; color: #2D3436; letter-spacing: -0.02em; }
-        .rel-subtitulo { font-size: 0.85rem; color: #95A5A6; }
 
         .rel-resumo {
           display: flex; align-items: center; gap: 0;

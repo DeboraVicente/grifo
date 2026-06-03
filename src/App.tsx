@@ -160,8 +160,11 @@ export default function App() {
         .perfil-dropdown hr { border: none; border-top: 1px solid #F1F2F6; margin: 4px 0; }
 
         /* Main Content — ocupa todo espaço restante */
-        .app-main { flex: 1; min-width: 0; padding: 1.5rem 2rem; padding-bottom: 100px; }
+        .app-main { flex: 1; min-width: 0; padding: 1rem 0.75rem; padding-bottom: 100px; }
         .content-limit { width: 100%; }
+        @media (min-width: 768px) {
+          .app-main { padding: 1.5rem 2rem; padding-bottom: 1.5rem; }
+        }
 
         /* Nav Mobile */
         .app-nav-mobile { 

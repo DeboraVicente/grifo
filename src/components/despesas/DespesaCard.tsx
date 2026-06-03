@@ -49,7 +49,8 @@ export default function DespesaCard({
     : 0
 
   const minhaParte = despesa.minhaParte
-  const minhaPartePorParcela = minhaParte && totalParcelas > 1 ? minhaParte / totalParcelas : minhaParte
+  const temMinhaParte = minhaParte !== undefined && minhaParte !== null
+  const minhaPartePorParcela = temMinhaParte && totalParcelas > 1 ? minhaParte! / totalParcelas : minhaParte
 
   const parcelasOrdenadas = despesa.listaParcelas
     ? [
@@ -93,7 +94,7 @@ export default function DespesaCard({
               <><span className="dot">·</span>
                 <span className="tag-recorrente">recorrente</span></>
             )}
-            {minhaParte && (
+            {temMinhaParte && (
               <><span className="dot">·</span>
                 <span className="tag-minha-parte"><SplitSquareHorizontal size={10} /> parcial</span></>
             )}
@@ -102,9 +103,9 @@ export default function DespesaCard({
 
         <div className="card-valor">
           <span className={despesa.pago ? 'riscado' : ''}>{fmt(saldoAtual)}</span>
-          {minhaParte && !despesa.pago && (
+          {temMinhaParte && !despesa.pago && (
             <span className="valor-minha-parte">
-              sua parte: {fmt(minhaPartePorParcela ?? minhaParte)}{totalParcelas > 1 ? '/mês' : ''}
+              sua parte: {fmt(minhaPartePorParcela ?? minhaParte!)}{totalParcelas > 1 ? '/mês' : ''}
             </span>
           )}
           {totalParcelas > 1 && !despesa.pago && !isFinanciamento && (
@@ -166,7 +167,7 @@ export default function DespesaCard({
             </div>
           )}
 
-          {minhaParte && (
+          {temMinhaParte && (
             <div className="minha-parte-box">
               <div className="mp-row">
                 <span className="mp-label">Total da despesa</span>

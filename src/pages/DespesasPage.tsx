@@ -87,6 +87,10 @@ export default function DespesasPage() {
   return (
     <div className="despesas-page">
       <div className="page-header">
+        <div>
+          <h1 className="page-titulo">Despesas</h1>
+        </div>
+
         <div className="filtros-wrap">
           {visualizacao === 'cards' && (
             <div className="filtros">
@@ -213,6 +217,7 @@ export default function DespesasPage() {
         .despesas-page { display: flex; flex-direction: column; gap: 1.5rem; }
 
         .page-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+        .page-titulo { font-size: 1.4rem; font-weight: 900; color: #2D3436; }
         .filtros-wrap { flex: 1; min-width: 0; }
         .filtros { display: flex; gap: 0.5rem; background: #F1F2F6; padding: 0.3rem; border-radius: 12px; width: fit-content; }
         .filtro-btn {

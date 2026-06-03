@@ -183,7 +183,7 @@ export function calcForecastGastos(
     const ano = hoje.getFullYear() + Math.floor((hoje.getMonth() + i) / 12)
 
     const gastos = despesas.reduce((s, d) => {
-      return s + parcelasMes(d, mes, ano).filter((p) => !p.pago).reduce((ps, p) => ps + p.valor, 0)
+      return s + parcelasMes(d, mes, ano).reduce((ps, p) => ps + p.valor, 0)
     }, 0)
 
     const receitasMes = receitasDoMes(receitas, mes, ano).reduce((s, r) => s + r.valor, 0)

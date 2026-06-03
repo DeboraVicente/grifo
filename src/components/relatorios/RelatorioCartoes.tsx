@@ -134,6 +134,7 @@ export default function RelatorioCartoes({ despesas, cartoes }: Props) {
         .rc-emoji { color: #BDC3C7; flex-shrink: 0; }
 
         .rc-valores { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; }
+        @media (max-width: 480px) { .rc-valores { grid-template-columns: 1fr 1fr; } }
         .rc-val-item { display: flex; flex-direction: column; gap: 0.2rem; }
         .rc-val-label { color: #95A5A6; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
         .rc-val-num { color: #2D3436; font-size: 0.9rem; font-weight: 800; }

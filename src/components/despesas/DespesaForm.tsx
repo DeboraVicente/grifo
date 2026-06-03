@@ -61,7 +61,7 @@ export default function DespesaForm({ inicial, cartoes, contas, onSalvar, onCanc
   const [loading, setLoading] = useState(false)
   const [recorrenteAtivo, setRecorrenteAtivo] = useState(inicial?.recorrente ?? false)
   const [recorrenciaMeses, setRecorrenciaMeses] = useState(12)
-  const [minhaParteAtivo, setMinhaParteAtivo] = useState(!!inicial?.minhaParte)
+  const [minhaParteAtivo, setMinhaParteAtivo] = useState(inicial?.minhaParte !== undefined && inicial?.minhaParte !== null)
 
   const set = (key: keyof DespesaFormType, value: any) => setForm((f) => ({ ...f, [key]: value }))
 
@@ -70,8 +70,9 @@ export default function DespesaForm({ inicial, cartoes, contas, onSalvar, onCanc
     ? (form.valorParcelaCustom ?? null)
     : (form.parcelas > 1 && form.valorTotal > 0 ? form.valorTotal / form.parcelas : null)
 
-  const minhaPartePorParcela = form.minhaParte && form.parcelas > 1
-    ? form.minhaParte / form.parcelas
+  const temMinhaParte = form.minhaParte !== undefined && form.minhaParte !== null
+  const minhaPartePorParcela = temMinhaParte && form.parcelas > 1
+    ? form.minhaParte! / form.parcelas
     : form.minhaParte ?? null
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -284,8 +285,10 @@ export default function DespesaForm({ inicial, cartoes, contas, onSalvar, onCanc
               <div>
                 <span className="toggle-titulo">Parte desta compra não é minha</span>
                 <span className="toggle-sub">
-                  {minhaParteAtivo && form.minhaParte
-                    ? `Sua parte: ${fmt(form.minhaParte)}${form.parcelas > 1 ? ` total · ${fmt(minhaPartePorParcela!)}/mês` : ''}`
+                  {minhaParteAtivo && temMinhaParte
+                    ? form.minhaParte === 0
+                      ? 'Esta compra não é sua (R$ 0,00)'
+                      : `Sua parte: ${fmt(form.minhaParte!)}${form.parcelas > 1 ? ` total · ${fmt(minhaPartePorParcela!)}/mês` : ''}`
                     : 'Indicar o valor que é de sua responsabilidade'}
                 </span>
               </div>
@@ -300,13 +303,18 @@ export default function DespesaForm({ inicial, cartoes, contas, onSalvar, onCanc
               <label className="sub-label">Minha parte total (R$)</label>
               <input
                 type="number" min="0" step="0.01" placeholder="0,00"
-                value={form.minhaParte || ''}
-                onChange={(e) => set('minhaParte', parseFloat(e.target.value) || undefined)}
+                value={form.minhaParte ?? ''}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  set('minhaParte', raw === '' ? undefined : parseFloat(raw))
+                }}
               />
-              {form.minhaParte && form.valorTotal > 0 && (
+              {temMinhaParte && form.valorTotal > 0 && (
                 <span className="minha-parte-hint">
-                  Você arca com {fmt(form.minhaParte)} de {fmt(form.valorTotal)} totais
-                  {form.parcelas > 1 ? ` · ${fmt(minhaPartePorParcela!)}/mês` : ''}
+                  {form.minhaParte === 0
+                    ? 'Esta compra não é sua — valor R$ 0,00'
+                    : `Você arca com ${fmt(form.minhaParte!)} de ${fmt(form.valorTotal)} totais${form.parcelas > 1 ? ` · ${fmt(minhaPartePorParcela!)}/mês` : ''}`
+                  }
                 </span>
               )}
             </div>

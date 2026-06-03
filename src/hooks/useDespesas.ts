@@ -159,7 +159,11 @@ export function useDespesas(userId: string | undefined) {
       : parseFloat((novoTotal / novasQtd).toFixed(2))
 
     const listaParcelas = regenerar
-      ? gerarParcelas(novoTotal, novasQtd, novaData, novaParcelaCustom)
+      ? gerarParcelas(novoTotal, novasQtd, novaData, novaParcelaCustom).map((nova) => {
+          const existente = despesa.listaParcelas.find((e) => e.numero === nova.numero)
+          if (existente?.pago) return { ...nova, pago: true, pagamentos: existente.pagamentos }
+          return { ...nova, pagamentos: existente?.pagamentos ?? [] }
+        })
       : despesa.listaParcelas
 
     await updateDoc(doc(db, 'despesas', id), {
