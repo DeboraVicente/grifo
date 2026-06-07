@@ -201,7 +201,9 @@ export default function DespesasPage() {
           <div className="despesas-list">
             {despesasExibidas.slice(pagina * ITENS_POR_PAGINA, (pagina + 1) * ITENS_POR_PAGINA).map((d) => {
               const cartao = cartoes.find(c => c.id === d.cartaoId)
-              const cartaoLabel = cartao ? cartao.nome : undefined
+              const conta = contas.find(c => c.id === d.contaId)
+              // Crédito → nome do cartão; demais → nome da conta
+              const cartaoLabel = cartao?.nome ?? conta?.nome
               return (
                 <DespesaCard
                   key={d.id}

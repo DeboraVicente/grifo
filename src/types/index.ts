@@ -136,6 +136,7 @@ export interface Caixinha {
   categoria: CaixinhaCategoria
   valorMeta?: number
   metaMensal?: number
+  dataObjetivo?: string
   valorAtual: number
   historico: MovimentoCaixinha[]
   userId: string
@@ -148,6 +149,8 @@ export interface CaixinhaForm {
   categoria: CaixinhaCategoria
   valorMeta?: number
   metaMensal?: number
+  dataObjetivo?: string
+  valorInicial?: number
 }
 
 export type StatusAmizade = 'pendente' | 'aceita' | 'recusada'

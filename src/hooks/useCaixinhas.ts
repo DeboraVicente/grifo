@@ -42,12 +42,22 @@ export function useCaixinhas(userId: string | undefined) {
 
   const criar = async (form: CaixinhaForm) => {
     if (!userId) return
+    const valorInicial = form.valorInicial ?? 0
+    const historico = valorInicial > 0 ? [{
+      id: crypto.randomUUID(),
+      tipo: 'entrada',
+      valor: valorInicial,
+      data: new Date().toISOString().split('T')[0],
+      observacao: 'Valor inicial',
+    }] : []
     await addDoc(collection(db, 'caixinhas'), {
-      ...form,
+      nome: form.nome,
+      categoria: form.categoria,
       valorMeta: form.valorMeta ?? null,
       metaMensal: form.metaMensal ?? null,
-      valorAtual: 0,
-      historico: [],
+      dataObjetivo: form.dataObjetivo ?? null,
+      valorAtual: valorInicial,
+      historico,
       userId,
       criadoEm: serverTimestamp(),
       atualizadoEm: serverTimestamp(),
@@ -59,6 +69,7 @@ export function useCaixinhas(userId: string | undefined) {
       ...form,
       valorMeta: form.valorMeta ?? null,
       metaMensal: form.metaMensal ?? null,
+      dataObjetivo: form.dataObjetivo ?? null,
       atualizadoEm: serverTimestamp(),
     })
   }

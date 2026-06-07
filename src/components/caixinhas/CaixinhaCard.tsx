@@ -21,6 +21,16 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
     ? Math.min((caixinha.valorAtual / caixinha.valorMeta) * 100, 100)
     : null
 
+  const sugestaoMensal = (() => {
+    if (!caixinha.valorMeta || !caixinha.dataObjetivo) return null
+    const falta = caixinha.valorMeta - caixinha.valorAtual
+    if (falta <= 0) return null
+    const alvo = new Date(caixinha.dataObjetivo + 'T12:00:00')
+    const hoje = new Date()
+    const meses = Math.max(1, (alvo.getFullYear() - hoje.getFullYear()) * 12 + (alvo.getMonth() - hoje.getMonth()))
+    return { valor: falta / meses, meses, data: alvo.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) }
+  })()
+
   const ultimosMovimentos = [...(caixinha.historico ?? [])]
     .sort((a, b) => b.data.localeCompare(a.data))
     .slice(0, 5)
@@ -35,6 +45,14 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
             <div className="card-meta">
               Meta: {fmt(caixinha.valorMeta)}
               {progresso !== null && <span className="pct"> · {progresso.toFixed(0)}%</span>}
+              {caixinha.dataObjetivo && (
+                <span className="data-objetivo"> · até {new Date(caixinha.dataObjetivo + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}</span>
+              )}
+            </div>
+          )}
+          {sugestaoMensal && (
+            <div className="card-sugestao">
+              💡 {fmt(sugestaoMensal.valor)}/mês por {sugestaoMensal.meses} {sugestaoMensal.meses === 1 ? 'mês' : 'meses'}
             </div>
           )}
         </div>
@@ -132,15 +150,11 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
         margin-bottom: 2px;
       }
 
-      .card-meta { 
-        color: #95A5A6; 
-        font-size: 0.75rem; 
-        font-weight: 500;
-      }
-
-      .pct { 
-        color: #C8A45A; 
-        font-weight: 700; 
+      .card-meta { color: #95A5A6; font-size: 0.75rem; font-weight: 500; }
+      .pct { color: #C8A45A; font-weight: 700; }
+      .data-objetivo { color: #3498DB; font-weight: 600; }
+      .card-sugestao {
+        font-size: 0.72rem; color: #C8A45A; font-weight: 600; margin-top: 2px;
       }
 
       .card-saldo { 

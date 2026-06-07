@@ -17,11 +17,21 @@ interface Props {
   onCancelar: () => void
 }
 
-const FORM_VAZIO: CaixinhaFormType = { nome: '', categoria: 'outros', valorMeta: undefined, metaMensal: undefined }
+const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+const FORM_VAZIO: CaixinhaFormType = { nome: '', categoria: 'outros', valorMeta: undefined, metaMensal: undefined, dataObjetivo: undefined }
+
+function mesesAte(dataStr: string): number {
+  const alvo = new Date(dataStr + 'T12:00:00')
+  const hoje = new Date()
+  return Math.max(1, (alvo.getFullYear() - hoje.getFullYear()) * 12 + (alvo.getMonth() - hoje.getMonth()))
+}
 
 export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
   const [form, setForm] = useState<CaixinhaFormType>(
-    inicial ? { nome: inicial.nome, categoria: inicial.categoria, valorMeta: inicial.valorMeta, metaMensal: inicial.metaMensal } : FORM_VAZIO
+    inicial
+      ? { nome: inicial.nome, categoria: inicial.categoria, valorMeta: inicial.valorMeta, metaMensal: inicial.metaMensal, dataObjetivo: inicial.dataObjetivo }
+      : FORM_VAZIO
   )
   const [temMeta, setTemMeta] = useState(!!inicial?.valorMeta)
   const [temMetaMensal, setTemMetaMensal] = useState(!!inicial?.metaMensal)
@@ -29,10 +39,26 @@ export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
 
   const set = (key: keyof CaixinhaFormType, value: any) => setForm((f) => ({ ...f, [key]: value }))
 
+  // Sugestão mensal baseada na data objetivo
+  const sugestaoMensal = (() => {
+    if (!temMeta || !form.valorMeta || !form.dataObjetivo) return null
+    const falta = form.valorMeta - (inicial?.valorAtual ?? 0)
+    if (falta <= 0) return null
+    const meses = mesesAte(form.dataObjetivo)
+    return { valor: falta / meses, meses }
+  })()
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    try { await onSalvar({ ...form, valorMeta: temMeta ? form.valorMeta : undefined, metaMensal: temMetaMensal ? form.metaMensal : undefined }) }
+    try {
+      await onSalvar({
+        ...form,
+        valorMeta: temMeta ? form.valorMeta : undefined,
+        metaMensal: temMetaMensal ? form.metaMensal : undefined,
+        dataObjetivo: temMeta ? form.dataObjetivo : undefined,
+      })
+    }
     finally { setLoading(false) }
   }
 
@@ -58,6 +84,15 @@ export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
             </select>
         </div>
 
+      {!inicial && (
+        <div className="field">
+          <label>Valor inicial (opcional)</label>
+          <input type="number" min="0" step="0.01" placeholder="R$ 0,00"
+            value={form.valorInicial ?? ''}
+            onChange={(e) => set('valorInicial', e.target.value === '' ? undefined : parseFloat(e.target.value))} />
+        </div>
+      )}
+
       <div className="field">
         <label className="checkbox-label">
           <input type="checkbox" checked={temMeta}
@@ -65,9 +100,26 @@ export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
           <span>Definir valor meta total</span>
         </label>
         {temMeta && (
-          <input type="number" min="0" step="0.01" placeholder="R$ 0,00"
-            value={form.valorMeta || ''} style={{ marginTop: '0.5rem' }}
-            onChange={(e) => set('valorMeta', parseFloat(e.target.value) || undefined)} />
+          <>
+            <input type="number" min="0" step="0.01" placeholder="R$ 0,00"
+              value={form.valorMeta || ''} style={{ marginTop: '0.5rem' }}
+              onChange={(e) => set('valorMeta', parseFloat(e.target.value) || undefined)} />
+            <label style={{ marginTop: '0.75rem', color: '#95A5A6', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Data objetivo (opcional)
+            </label>
+            <input type="date" value={form.dataObjetivo ?? ''}
+              min={new Date().toISOString().split('T')[0]}
+              onChange={(e) => set('dataObjetivo', e.target.value || undefined)} />
+            {sugestaoMensal && (
+              <div className="sugestao-mensal">
+                <span className="sugestao-ico">💡</span>
+                <span>
+                  Para atingir a meta em <strong>{sugestaoMensal.meses} {sugestaoMensal.meses === 1 ? 'mês' : 'meses'}</strong>,
+                  guarde <strong>{fmt(sugestaoMensal.valor)}/mês</strong>
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -124,11 +176,19 @@ export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
           font-family: inherit;
         }
 
-        .field input:focus, .field select:focus, .field textarea:focus { 
-          border-color: #C8A45A; 
+        .field input:focus, .field select:focus, .field textarea:focus {
+          border-color: #C8A45A;
           background: #FFFFFF;
           box-shadow: 0 0 0 4px rgba(200,164,90,0.05);
         }
+        .sugestao-mensal {
+          display: flex; align-items: flex-start; gap: 0.5rem; margin-top: 0.5rem;
+          background: #FFFDF7; border: 1px solid rgba(200,164,90,0.25);
+          border-radius: 10px; padding: 0.65rem 0.9rem;
+          font-size: 0.82rem; color: #636E72; line-height: 1.5;
+        }
+        .sugestao-ico { font-size: 0.95rem; flex-shrink: 0; margin-top: 1px; }
+        .sugestao-mensal strong { color: #C8A45A; font-weight: 700; }
         `}</style>
       </form>
     )

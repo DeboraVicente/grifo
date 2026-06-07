@@ -54,7 +54,7 @@ export default function ForecastGastos({ despesas, receitas, userId }: Props) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F2F6" />
                 <XAxis dataKey="nome" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={fmtEixo} width={70} />
-                <Tooltip formatter={(v: number) => fmt(v)} />
+                <Tooltip formatter={(v) => fmt(Number(v))} />
                 <Legend />
                 <ReferenceLine y={0} stroke="#E0E0E0" />
                 <Area type="monotone" dataKey="Receitas" stroke="#2ECC71" fill="url(#gradReceitas)" strokeWidth={2} dot={{ r: 3 }} />

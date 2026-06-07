@@ -1,6 +1,5 @@
 import type { Despesa, Receita, Caixinha, Categoria } from '../../types'
 import { calcFluxoCaixaMensal, fmt } from '../../hooks/useRelatorios'
-import { PiggyBank } from 'lucide-react'
 
 interface Props {
   despesas: Despesa[]
@@ -62,9 +61,6 @@ export default function FluxoCaixaMensal({ despesas, receitas, caixinhas, userId
 
   const pctFixo = totalDespesas > 0 ? Math.round((totalFixo / totalDespesas) * 100) : 0
   const pctPago = totalDespesas > 0 ? Math.round((totalPago / totalDespesas) * 100) : 0
-  const totalGeral = dados.totalReceitas + totalDespesas
-  const pctReceita = totalGeral > 0 ? (dados.totalReceitas / totalGeral) * 100 : 50
-  const pctDespesa = 100 - pctReceita
   const semDados = totalDespesas === 0 && dados.totalReceitas === 0
 
   const regra50 = barraRegra(totalEssencial, receitas50)

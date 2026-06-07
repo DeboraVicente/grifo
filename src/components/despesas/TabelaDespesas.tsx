@@ -78,12 +78,18 @@ export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, ta
     const linhas: Linha[] = []
     for (const d of despesas) {
       const cartao = cartoes.find(c => c.id === d.cartaoId)
-      const contaDoCartao = cartao?.contaId ? contas.find(c => c.id === cartao.contaId) : undefined
       const contaDireta = contas.find(c => c.id === d.contaId)
-      const contaLabel = contaDoCartao?.nome ?? contaDireta?.nome ?? cartao?.nome
+      // Crédito → nome do cartão; demais → nome da conta da despesa
+      const contaLabel = cartao?.nome ?? contaDireta?.nome
       const metodoLabel = METODO_LABEL[d.metodoPagamento] ?? d.metodoPagamento
-      for (const p of d.listaParcelas ?? []) {
-        if (p.dataVencimento.startsWith(chave)) {
+      // Fallback para despesas sem listaParcelas: usa d.data como vencimento
+      const parcelas = d.listaParcelas?.length > 0
+        ? d.listaParcelas
+        : [{ numero: 1, valor: d.valorParcela || d.valorTotal, dataVencimento: d.data, pago: d.pago, pagamentos: [] }]
+
+      for (const p of parcelas) {
+        const [pAno, pMes] = (p.dataVencimento ?? '').split('-').map(Number)
+        if (pAno === ano && pMes === mes) {
           const temMinhaParte = d.minhaParte !== undefined && d.minhaParte !== null
           const valorExibido = temMinhaParte
             ? parseFloat((d.minhaParte! / d.parcelas).toFixed(2))
@@ -106,7 +112,8 @@ export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, ta
     return todasLinhas.filter(l => {
       if (tab === 'recorrentes' && !l.despesa.recorrente) return false
       if (tab === 'parcelados' && l.despesa.parcelas <= 1) return false
-      if (tab === 'compartilhados' && l.despesa.minhaParte === undefined || l.despesa.minhaParte === null) return false
+      const temMinhaParte = l.despesa.minhaParte !== undefined && l.despesa.minhaParte !== null
+      if (tab === 'compartilhados' && !temMinhaParte) return false
       if (filtros.status === 'pago' && !l.pago) return false
       if (filtros.status === 'pendente' && l.pago) return false
       if (filtros.tipo !== 'todos' && l.despesa.tipoGasto !== filtros.tipo) return false

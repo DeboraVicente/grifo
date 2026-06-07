@@ -33,7 +33,6 @@ const ABAS: { id: RelatorioTipo; label: string; Icon: LucideIcon }[] = [
 ]
 
 const NOMES_MES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 export default function RelatoriosPage() {
   const { user } = useAuthContext()
@@ -53,16 +52,6 @@ export default function RelatoriosPage() {
     else if (dir === -1 && mes === 0) { setMes(11); setAno(a => a - 1) }
     else setMes(m => m + dir)
   }
-
-  const mesStr = `${ano}-${String(mes + 1).padStart(2, '0')}`
-  const totalMes = despesas.reduce((total, d) => {
-    if (d.listaParcelas?.length > 0) {
-      return total + d.listaParcelas
-        .filter(p => p.dataVencimento?.startsWith(mesStr))
-        .reduce((s, p) => s + p.valor, 0)
-    }
-    return !d.pago && d.data?.startsWith(mesStr) ? total + d.valorTotal : total
-  }, 0)
 
   const isTemporal = !['parcelamentos', 'forecast', 'evolucao', 'cartoes'].includes(abaAtiva)
 

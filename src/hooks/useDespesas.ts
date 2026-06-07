@@ -61,7 +61,18 @@ export function useDespesas(userId: string | undefined) {
         // Normaliza despesas antigas que usavam "valor" em vez de "valorTotal"
         const valorTotal = raw.valorTotal ?? raw.valor ?? 0
         const valorParcela = raw.valorParcela ?? valorTotal
-        const listaParcelas = raw.listaParcelas ?? []
+        const listaParcelas = (() => {
+          if (raw.listaParcelas?.length > 0) return raw.listaParcelas
+          // Reconstrói para despesas antigas sem listaParcelas
+          if (valorTotal > 0 && raw.data) {
+            const qtd = raw.parcelas ?? 1
+            const parcelas = gerarParcelas(valorTotal, qtd, raw.data, raw.valorParcela)
+            // Se a despesa está paga, marca todas as parcelas como pagas
+            if (raw.pago) return parcelas.map((p: any) => ({ ...p, pago: true }))
+            return parcelas
+          }
+          return []
+        })()
         return {
           id: d.id,
           ...raw,
