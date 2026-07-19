@@ -14,6 +14,7 @@ import type { Despesa, DespesaForm as DespesaFormType } from '../types'
 type ModalTipo = 'criar' | 'editar' | 'pagar' | 'adiantar' | null
 type FiltroTipo = 'pendentes' | 'parcialmente-pagas' | 'pagas' | 'todas'
 type Visualizacao = 'cards' | 'tabela'
+type FiltroTipoGasto = 'todos' | 'fixo' | 'variavel'
 
 const MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -36,6 +37,9 @@ export default function DespesasPage() {
   const [selecionada, setSelecionada] = useState<Despesa | null>(null)
   const [parcelaSelecionada, setParcelaSelecionada] = useState<number>(1)
   const [filtro, setFiltro] = useState<FiltroTipo>('pendentes')
+  const [filtroMetodo, setFiltroMetodo] = useState<string>('todos')
+  const [filtroContaCard, setFiltroContaCard] = useState<string>('todos')
+  const [filtroTipoGasto, setFiltroTipoGasto] = useState<FiltroTipoGasto>('todos')
   const [pagina, setPagina] = useState(0)
   const [visualizacao, setVisualizacao] = useState<Visualizacao>('tabela')
 
@@ -109,10 +113,37 @@ export default function DespesasPage() {
     return resultado.sort((a, b) => b.data.localeCompare(a.data))
   }, [despesas])
 
+  // Opções dinâmicas de método/conta para filtros dos cards
+  const metodosDisponiveis = useMemo(() => {
+    const set = new Set(despesasAgrupadas.map(d => d.metodoPagamento).filter(Boolean))
+    return Array.from(set) as string[]
+  }, [despesasAgrupadas])
+
+  const contasCartoesDisponiveis = useMemo(() => {
+    const opcoes = new Map<string, string>()
+    for (const d of despesasAgrupadas) {
+      if (d.cartaoId) {
+        const c = cartoes.find(c => c.id === d.cartaoId)
+        if (c) opcoes.set(`cartao:${c.id}`, c.nome)
+      } else if (d.contaId) {
+        const c = contas.find(c => c.id === d.contaId)
+        if (c) opcoes.set(`conta:${c.id}`, c.nome)
+      }
+    }
+    return Array.from(opcoes.entries()).map(([value, label]) => ({ value, label }))
+  }, [despesasAgrupadas, cartoes, contas])
+
   const despesasExibidas = despesasAgrupadas.filter((d) => {
-    if (filtro === 'pendentes') return !d.pago
-    if (filtro === 'parcialmente-pagas') return !d.pago && (d.listaParcelas?.some(p => p.pago) ?? false)
-    if (filtro === 'pagas') return d.pago
+    if (filtro === 'pendentes' && d.pago) return false
+    if (filtro === 'parcialmente-pagas' && (d.pago || !(d.listaParcelas?.some(p => p.pago) ?? false))) return false
+    if (filtro === 'pagas' && !d.pago) return false
+    if (filtroMetodo !== 'todos' && d.metodoPagamento !== filtroMetodo) return false
+    if (filtroTipoGasto !== 'todos' && d.tipoGasto !== filtroTipoGasto) return false
+    if (filtroContaCard !== 'todos') {
+      const [tipo, id] = filtroContaCard.split(':')
+      if (tipo === 'cartao' && d.cartaoId !== id) return false
+      if (tipo === 'conta' && d.contaId !== id) return false
+    }
     return true
   })
 
@@ -158,18 +189,55 @@ export default function DespesasPage() {
             ))}
           </div>
         ) : (
-          <div className="filtros">
-            {([
-              { id: 'pendentes', label: 'Pendentes' },
-              { id: 'parcialmente-pagas', label: 'Parc. pagas' },
-              { id: 'pagas', label: 'Pagas' },
-              { id: 'todas', label: 'Todas' },
-            ] as const).map(({ id, label }) => (
-              <button key={id} className={`filtro-btn ${filtro === id ? 'active' : ''}`}
-                onClick={() => { setFiltro(id); setPagina(0) }}>
-                {label}
-              </button>
-            ))}
+          <div className="filtros-cards-wrap">
+            <div className="filtros">
+              {([
+                { id: 'pendentes', label: 'Pendentes' },
+                { id: 'parcialmente-pagas', label: 'Parc. pagas' },
+                { id: 'pagas', label: 'Pagas' },
+                { id: 'todas', label: 'Todas' },
+              ] as const).map(({ id, label }) => (
+                <button key={id} className={`filtro-btn ${filtro === id ? 'active' : ''}`}
+                  onClick={() => { setFiltro(id); setPagina(0) }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="filtros-extra">
+              <select
+                className={`filtro-select ${filtroTipoGasto !== 'todos' ? 'ativo' : ''}`}
+                value={filtroTipoGasto}
+                onChange={e => { setFiltroTipoGasto(e.target.value as FiltroTipoGasto); setPagina(0) }}
+              >
+                <option value="todos">Tipo</option>
+                <option value="fixo">Fixo</option>
+                <option value="variavel">Variável</option>
+              </select>
+              {metodosDisponiveis.length > 1 && (
+                <select
+                  className={`filtro-select ${filtroMetodo !== 'todos' ? 'ativo' : ''}`}
+                  value={filtroMetodo}
+                  onChange={e => { setFiltroMetodo(e.target.value); setPagina(0) }}
+                >
+                  <option value="todos">Método</option>
+                  {metodosDisponiveis.map(m => (
+                    <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
+                  ))}
+                </select>
+              )}
+              {contasCartoesDisponiveis.length > 1 && (
+                <select
+                  className={`filtro-select ${filtroContaCard !== 'todos' ? 'ativo' : ''}`}
+                  value={filtroContaCard}
+                  onChange={e => { setFiltroContaCard(e.target.value); setPagina(0) }}
+                >
+                  <option value="todos">Conta/Cartão</option>
+                  {contasCartoesDisponiveis.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
         )}
 
@@ -318,8 +386,9 @@ export default function DespesasPage() {
         }
         .tab-btn.ativo { background: #FFFFFF; color: #C8A45A; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
 
+        .filtros-cards-wrap { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
         .filtros {
-          flex: 1; display: flex; gap: 0;
+          display: flex; gap: 0;
           background: #F1F2F6; padding: 0.3rem; border-radius: 12px;
           overflow-x: auto; scrollbar-width: none;
         }
@@ -330,6 +399,19 @@ export default function DespesasPage() {
           cursor: pointer; transition: all 0.2s; white-space: nowrap; font-family: inherit;
         }
         .filtro-btn.active { background: #FFFFFF; color: #C8A45A; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+
+        .filtros-extra { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+        .filtro-select {
+          background: #F8F9FA; border: 1px solid #E8EAED; border-radius: 8px;
+          padding: 0.35rem 0.6rem; font-size: 0.75rem; font-weight: 600; color: #7F8C8D;
+          cursor: pointer; font-family: inherit; outline: none;
+          transition: all 0.2s; appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2395A5A6' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: right 0.5rem center;
+          padding-right: 1.5rem;
+        }
+        .filtro-select:hover { border-color: #C8A45A; }
+        .filtro-select.ativo { border-color: #C8A45A; color: #C8A45A; background-color: #FFF8EC; }
 
         .btn-criar {
           background: #C8A45A; color: #FFFFFF; border: none; border-radius: 12px;
