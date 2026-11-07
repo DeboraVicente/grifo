@@ -4,17 +4,45 @@
   padding: 0;
 }
 
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tabbar-h: 64px;
+  --ouro: #C8A45A;
+  --fundo: #F8F9FA;
+  --texto: #2D3436;
+  --texto-suave: #95A5A6;
+}
+
 html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
+  height: 100%;
 }
 
 body {
-  background: #e6f0f1;
-  color: #e8e8e8;
-  font-family: 'Georgia', serif;
+  min-height: 100%;
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Sensação de app: sem "elástico" puxando a página inteira e sem flash azul ao tocar */
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
 }
+
+/* Botões e abas não devem selecionar texto ao segurar o dedo */
+button, nav, .no-select {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+button { touch-action: manipulation; }
+button:active { transform: scale(0.97); }
+
+/* iOS dá zoom em inputs com fonte < 16px */
+input, select, textarea { font-size: 16px; font-family: inherit; }
 
 input[type="date"]::-webkit-calendar-picker-indicator {
   filter: opacity(0.4);
@@ -23,4 +51,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #e6f0f1; border-radius: 2px;}
+::-webkit-scrollbar-thumb { background: #DFE4EA; border-radius: 2px; }
+
+/* No celular o título já aparece no cabeçalho fixo, então escondemos o h1 repetido das páginas */
+@media (max-width: 767px) {
+  .rel-titulo, .rec-titulo, .page-titulo { display: none; }
+}

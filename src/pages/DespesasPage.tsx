@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { LayoutGrid, TableProperties, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useDespesas } from '../hooks/useDespesas'
 import { useCartoes } from '../hooks/useCartoes'
@@ -26,7 +26,12 @@ function mesProximo(ano: number, mes: number) {
   return mes === 12 ? { ano: ano + 1, mes: 1 } : { ano, mes: mes + 1 }
 }
 
-export default function DespesasPage() {
+interface DespesasPageProps {
+  /** Muda de valor quando o botão "+" da barra inferior é tocado */
+  pedidoNovaDespesa?: number
+}
+
+export default function DespesasPage({ pedidoNovaDespesa = 0 }: DespesasPageProps) {
   const { user } = useAuthContext()
   const { despesas, loading, criar, editar, remover, pagarParcela, removerPagamento, adicionarAdiantamento } = useDespesas(user?.uid)
   const { cartoes } = useCartoes(user?.uid)
@@ -35,6 +40,11 @@ export default function DespesasPage() {
   const hoje = new Date()
   const [modal, setModal] = useState<ModalTipo>(null)
   const [selecionada, setSelecionada] = useState<Despesa | null>(null)
+
+  // Abre o formulário quando vem do botão "+" ou do atalho do ícone do app
+  useEffect(() => {
+    if (pedidoNovaDespesa > 0) { setSelecionada(null); setModal('criar') }
+  }, [pedidoNovaDespesa])
   const [parcelaSelecionada, setParcelaSelecionada] = useState<number>(1)
   const [filtro, setFiltro] = useState<FiltroTipo>('pendentes')
   const [filtroMetodo, setFiltroMetodo] = useState<string>('todos')
