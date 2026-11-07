@@ -180,3 +180,43 @@ export interface Receita {
   criadoEm: string
   atualizadoEm: string
 }
+
+// ─── Gastos previstos ────────────────────────────────────────────────────────
+// Gastos que sabemos que vão acontecer de tempos em tempos (troca de óleo,
+// revisão, IPVA, dentista...). O app calcula quanto reservar por mês e avisa
+// quando está chegando a hora de fazer.
+
+export interface MovimentoPrevisto {
+  id: string
+  tipo: 'reserva' | 'uso' | 'ajuste'
+  valor: number
+  data: string
+  observacao?: string
+}
+
+export interface GastoPrevisto {
+  id: string
+  nome: string
+  categoria: Categoria
+  valorEstimado: number
+  intervaloMeses: number
+  proximaData: string
+  avisarDiasAntes: number
+  valorReservado: number
+  historico: MovimentoPrevisto[]
+  observacoes?: string
+  userId: string
+  criadoEm: string
+  atualizadoEm: string
+}
+
+export interface GastoPrevistoForm {
+  nome: string
+  categoria: Categoria
+  valorEstimado: number
+  intervaloMeses: number
+  proximaData: string
+  avisarDiasAntes: number
+  valorJaReservado?: number
+  observacoes?: string
+}

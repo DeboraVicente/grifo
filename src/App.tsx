@@ -4,11 +4,15 @@ import type { LucideIcon } from 'lucide-react'
 import { useAuthContext } from './lib/AuthContext'
 import AuthPage from './pages/AuthPage'
 import DespesasPage from './pages/DespesasPage'
-import CaixinhasPage from './pages/CaixinhasPage'
+import ReservasPage, { type SegmentoReservas } from './pages/ReservasPage'
 import ContaPage from './pages/ContaPage'
 import RelatoriosPage from './pages/RelatoriosPage'
 import ReceitasPage from './pages/ReceitasPage'
 import InstalarApp from './components/ui/InstalarApp'
+import AlertasPrevistos from './components/previstos/AlertasPrevistos'
+import EstilosPrevistos from './components/previstos/estilos'
+import { useGastosPrevistos } from './hooks/useGastosPrevistos'
+import { precisaAtencao } from './lib/previstos'
 
 type Tab = 'despesas' | 'caixinhas' | 'conta' | 'relatorios' | 'receitas'
 
@@ -37,6 +41,10 @@ export default function App() {
   const [tab, setTab] = useState<Tab>(acaoInicial ? 'despesas' : 'relatorios')
   const [pedidoNovaDespesa, setPedidoNovaDespesa] = useState(acaoInicial ? 1 : 0)
 
+  const [segmentoReservas, setSegmentoReservas] = useState<SegmentoReservas>('caixinhas')
+  const previstosApi = useGastosPrevistos(user?.uid)
+  const alertasPrevistos = previstosApi.previstos.filter(precisaAtencao).length
+
   const [menuAberto, setMenuAberto] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -52,6 +60,11 @@ export default function App() {
   const irPara = (t: Tab) => {
     setTab(t)
     window.scrollTo({ top: 0 })
+  }
+
+  const abrirPrevistos = () => {
+    setSegmentoReservas('previstos')
+    irPara('caixinhas')
   }
 
   const novaDespesa = () => {
@@ -111,6 +124,7 @@ export default function App() {
               <button key={id} className={tab === id ? 'active' : ''} onClick={() => irPara(id)}>
                 <Icon size={17} />
                 <span>{label}</span>
+                {id === 'caixinhas' && alertasPrevistos > 0 && <span className="nav-badge-side">{alertasPrevistos}</span>}
               </button>
             ))}
           </nav>
@@ -119,10 +133,23 @@ export default function App() {
         <main className="app-main">
           <div className="content-limit">
             <InstalarApp />
-            {tab === 'relatorios' && <RelatoriosPage />}
+            {tab === 'relatorios' && (
+              <>
+                <EstilosPrevistos />
+                <AlertasPrevistos previstos={previstosApi.previstos} onAbrir={abrirPrevistos} />
+                <RelatoriosPage />
+              </>
+            )}
             {tab === 'despesas' && <DespesasPage pedidoNovaDespesa={pedidoNovaDespesa} />}
             {tab === 'receitas' && <ReceitasPage />}
-            {tab === 'caixinhas' && <CaixinhasPage />}
+            {tab === 'caixinhas' && (
+              <ReservasPage
+                segmento={segmentoReservas}
+                onSegmento={setSegmentoReservas}
+                previstosApi={previstosApi}
+                alertasPrevistos={alertasPrevistos}
+              />
+            )}
             {tab === 'conta' && <ContaPage />}
           </div>
         </main>
@@ -141,7 +168,10 @@ export default function App() {
         </button>
         {NAV_ITEMS.slice(2).map(({ id, label, Icon }) => (
           <button key={id} className={tab === id ? 'active' : ''} onClick={() => irPara(id)}>
-            <Icon size={22} strokeWidth={tab === id ? 2.4 : 2} />
+            <span className="tab-ico">
+              <Icon size={22} strokeWidth={tab === id ? 2.4 : 2} />
+              {id === 'caixinhas' && alertasPrevistos > 0 && <span className="tab-dot" />}
+            </span>
             <span>{label}</span>
           </button>
         ))}
@@ -196,6 +226,10 @@ export default function App() {
           display: flex; align-items: center; justify-content: center;
           box-shadow: 0 6px 16px rgba(200, 164, 90, 0.4);
         }
+
+        .tab-ico { position: relative; display: flex; }
+        .tab-dot { position: absolute; top: -2px; right: -4px; width: 9px; height: 9px; border-radius: 50%; background: #E17055; border: 2px solid #FFF; }
+        .nav-badge-side { margin-left: auto; background: #C8A45A; color: #FFF; border-radius: 999px; font-size: 0.7rem; padding: 1px 7px; }
 
         /* Menu do perfil */
         .header-user-wrapper { position: relative; }

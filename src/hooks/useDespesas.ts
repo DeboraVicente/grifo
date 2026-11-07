@@ -92,7 +92,7 @@ export function useDespesas(userId: string | undefined) {
     return unsub
   }, [userId])
 
-  const criar = async (form: DespesaForm) => {
+  const criar = async (form: DespesaForm, opcoes?: { jaPago?: boolean }) => {
     if (!userId) return
     const valorParcela = form.valorParcelaCustom
       ? parseFloat(form.valorParcelaCustom.toFixed(2))
@@ -138,9 +138,17 @@ export function useDespesas(userId: string | undefined) {
       }
       await batch.commit()
     } else {
-      const listaParcelas = gerarParcelas(form.valorTotal, form.parcelas, form.data, form.valorParcelaCustom)
+      let listaParcelas = gerarParcelas(form.valorTotal, form.parcelas, form.data, form.valorParcelaCustom)
+      // Gasto que já aconteceu (ex.: concluído a partir de um gasto previsto)
+      if (opcoes?.jaPago) {
+        listaParcelas = listaParcelas.map((p) => ({
+          ...p, pago: true,
+          pagamentos: [{ id: crypto.randomUUID(), userId, valor: p.valor, data: form.data }],
+        }))
+      }
       await addDoc(collection(db, 'despesas'), {
         ...baseDoc,
+        pago: !!opcoes?.jaPago,
         dataCompra: form.dataCompra || null,
         data: form.data,
         listaParcelas,
