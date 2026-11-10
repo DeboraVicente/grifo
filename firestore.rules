@@ -2,69 +2,141 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Perfis de usuário — qualquer autenticado pode ler (para busca de amigos)
+    function logado() {
+      return request.auth != null;
+    }
+
+    function familiaDoc(fid) {
+      return /databases/$(database)/documents/familias/$(fid);
+    }
+
+    // Acesso a dados com userId == fid:
+    //  - fid é "p_<uid>": itens pessoais, só a própria pessoa (nem o dono da família);
+    //  - fid é o próprio uid (família própria / itens pessoais antigos de membro), ou
+    //  - o usuário está na lista de membros da família fid.
+    // A verificação usa a família (fonte da verdade), nunca o perfil,
+    // que é editável pelo próprio usuário.
+    function ehMembroDe(fid) {
+      return fid == 'p_' + request.auth.uid
+        || fid == request.auth.uid
+        || (exists(familiaDoc(fid)) && request.auth.uid in get(familiaDoc(fid)).data.membros);
+    }
+
+    function podeLer()    { return logado() && ehMembroDe(resource.data.userId); }
+    function podeCriar()  { return logado() && ehMembroDe(request.resource.data.userId); }
+    // Pode alterar se tem acesso ao item e o destino (userId novo) também é acessível
+    function podeAlterar() { return podeLer() && ehMembroDe(request.resource.data.userId); }
+
+    // Perfis de usuário
+    // Cada pessoa só lê e escreve o próprio perfil
+    match /perfis/{uid} {
+      allow read, write: if logado() && request.auth.uid == uid;
+    }
+
+    // Famílias (id = uid do dono)
+    match /familias/{fid} {
+      allow read: if logado() && (fid == request.auth.uid || request.auth.uid in resource.data.membros);
+
+      // Excluir: só o dono, e só quando não há outros membros (exclusão de conta)
+      allow delete: if logado()
+        && fid == request.auth.uid
+        && resource.data.membros.size() <= 1;
+
+      // Cada usuário cria apenas a própria família, sendo o único membro
+      allow create: if logado()
+        && fid == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.membros == [request.auth.uid];
+
+      // Dono: altera tudo, mas não troca o dono nem se remove
+      allow update: if logado()
+        && request.auth.uid == resource.data.ownerUid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.auth.uid in request.resource.data.membros;
+
+      // Entrada via convite: precisa enviar o token correto (conviteUsado) dentro da validade
+      // e só pode adicionar a si mesmo
+      allow update: if logado()
+        && !(request.auth.uid in resource.data.membros)
+        && resource.data.get('conviteToken', null) != null
+        && request.resource.data.get('conviteUsado', '') == resource.data.conviteToken
+        && resource.data.conviteExpira > request.time.toMillis()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membros', 'nomes', 'emails', 'conviteUsado'])
+        && request.resource.data.membros.toSet() == resource.data.membros.toSet().union([request.auth.uid].toSet())
+        && request.resource.data.nomes.diff(resource.data.nomes).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.emails.diff(resource.data.emails).affectedKeys().hasOnly([request.auth.uid]);
+
+      // Membro (não dono): sair da família ou atualizar o próprio nome/email
+      allow update: if logado()
+        && request.auth.uid in resource.data.membros
+        && request.auth.uid != resource.data.ownerUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membros', 'nomes', 'emails'])
+        && request.resource.data.membros.toSet().difference(resource.data.membros.toSet()).size() == 0
+        && resource.data.membros.toSet().difference(request.resource.data.membros.toSet()).hasOnly([request.auth.uid])
+        && request.resource.data.nomes.diff(resource.data.nomes).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.emails.diff(resource.data.emails).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
+    // Registros legados (amigos foi removido): só leitura e exclusão pelo próprio dono,
+    // para a exclusão de conta conseguir limpar tudo
     match /usuarios/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read, delete: if logado() && request.auth.uid == userId;
     }
-
-    // Contas bancárias — apenas o próprio dono
-    match /contas/{contaId} {
-      allow read:   if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
-    }
-
-    // Cartões de crédito — apenas o próprio dono
-    match /cartoes/{cartaoId} {
-      allow read:   if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
-    }
-
-    // Despesas — apenas o próprio dono
-    match /despesas/{despesaId} {
-      allow read:   if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
-    }
-
-    // Caixinhas
-    match /caixinhas/{caixinhaId} {
-      allow read, write: if request.auth != null &&
-        request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null &&
-        request.auth.uid == request.resource.data.userId;
-    }
-
-    // Receitas
-    match /receitas/{receitaId} {
-      allow read, update, delete: if request.auth != null &&
-        request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null &&
-        request.auth.uid == request.resource.data.userId;
-    }
-
-    // Gastos previstos (manutenções, revisões, anuidades...) — apenas o próprio dono
-    match /gastosPrevistos/{id} {
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-    }
-
-    // Amizades
     match /amizades/{amizadeId} {
-      allow read: if request.auth != null && (
+      allow read, delete: if logado() && (
         request.auth.uid == resource.data.solicitanteId ||
         request.auth.uid == resource.data.receptorId
       );
-      allow create: if request.auth != null &&
-        request.auth.uid == request.resource.data.solicitanteId;
-      // Receptor pode aceitar/recusar; solicitante não pode auto-aceitar
-      allow update: if request.auth != null &&
-        request.auth.uid == resource.data.receptorId;
+    }
+
+    // Dados financeiros — acesso pela família (userId = familiaId) ou pessoal (userId = uid)
+    match /contas/{id} {
+      allow read, delete: if podeLer();
+      allow create: if podeCriar();
+      allow update: if podeAlterar();
+    }
+
+    match /cartoes/{id} {
+      allow read, delete: if podeLer();
+      allow create: if podeCriar();
+      allow update: if podeAlterar();
+    }
+
+    match /despesas/{id} {
+      allow read, delete: if podeLer();
+      allow create: if podeCriar();
+      allow update: if podeAlterar();
+    }
+
+    match /caixinhas/{id} {
+      allow read, delete: if podeLer();
+      allow create: if podeCriar();
+      allow update: if podeAlterar();
+    }
+
+    // Receitas: ficam no espaço privado de quem recebeu (p_<uid>), só essa pessoa edita.
+    // Para o rateio por renda, membros da família podem LER as receitas que têm
+    // familiaId = família deles, enquanto quem recebeu (recebidoPor) ainda for membro.
+    // Ao sair da família, as receitas da pessoa deixam de ser lidas pela família.
+    function lidaPelaFamilia() {
+      return logado()
+        && resource.data.get('familiaId', null) != null
+        && exists(familiaDoc(resource.data.familiaId))
+        && request.auth.uid in get(familiaDoc(resource.data.familiaId)).data.membros
+        && resource.data.get('recebidoPor', null) in get(familiaDoc(resource.data.familiaId)).data.membros;
+    }
+
+    match /receitas/{id} {
+      allow read: if podeLer() || lidaPelaFamilia();
+      allow delete: if podeLer();
+      allow create: if podeCriar();
+      allow update: if podeAlterar();
+    }
+
+    match /gastosPrevistos/{id} {
+      allow read, delete: if podeLer();
+      allow create: if podeCriar();
+      allow update: if podeAlterar();
     }
   }
 }

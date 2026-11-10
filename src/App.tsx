@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react'
-import { Receipt, PiggyBank, BarChart2, TrendingUp, Plus } from 'lucide-react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { Receipt, PiggyBank, BarChart2, TrendingUp, CalendarClock } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAuthContext } from './lib/AuthContext'
 import AuthPage from './pages/AuthPage'
 import DespesasPage from './pages/DespesasPage'
-import ReservasPage, { type SegmentoReservas } from './pages/ReservasPage'
+import CaixinhasPage from './pages/CaixinhasPage'
+import GastosPrevistosPage from './pages/GastosPrevistosPage'
 import ContaPage from './pages/ContaPage'
 import RelatoriosPage from './pages/RelatoriosPage'
 import ReceitasPage from './pages/ReceitasPage'
@@ -13,18 +14,22 @@ import AlertasPrevistos from './components/previstos/AlertasPrevistos'
 import EstilosPrevistos from './components/previstos/estilos'
 import { useGastosPrevistos } from './hooks/useGastosPrevistos'
 import { precisaAtencao } from './lib/previstos'
+import { usePerfil } from './hooks/usePerfil'
+import { useFamilia, type ResultadoConvite } from './hooks/useFamilia'
+import type { InfoFamilia } from './types'
 
-type Tab = 'despesas' | 'caixinhas' | 'conta' | 'relatorios' | 'receitas'
+type Tab = 'despesas' | 'previstos' | 'caixinhas' | 'conta' | 'relatorios' | 'receitas'
 
 const NAV_ITEMS: { id: Tab; label: string; Icon: LucideIcon }[] = [
   { id: 'relatorios', label: 'Início', Icon: BarChart2 },
   { id: 'despesas', label: 'Despesas', Icon: Receipt },
   { id: 'receitas', label: 'Receitas', Icon: TrendingUp },
+  { id: 'previstos', label: 'Previstos', Icon: CalendarClock },
   { id: 'caixinhas', label: 'Caixinhas', Icon: PiggyBank },
 ]
 
 const TITULOS: Record<Tab, string> = {
-  relatorios: 'Início', despesas: 'Despesas', receitas: 'Receitas', caixinhas: 'Caixinhas', conta: 'Conta',
+  relatorios: 'Início', despesas: 'Despesas', receitas: 'Receitas', previstos: 'Previstos', caixinhas: 'Caixinhas', conta: 'Conta',
 }
 
 // Atalho "Novo gasto" do ícone do app abre em /?acao=nova-despesa
@@ -35,15 +40,59 @@ function lerAcaoInicial(): boolean {
   return pediu
 }
 
+function lerConvite(): { token: string; familiaId: string } | null {
+  const params = new URLSearchParams(window.location.search)
+  const token = params.get('convite')
+  const familiaId = params.get('familia')
+  if (token && familiaId) return { token, familiaId }
+  return null
+}
+
 export default function App() {
   const { user, loading, signOut } = useAuthContext()
   const [acaoInicial] = useState(lerAcaoInicial)
+  const [convitePendente] = useState(lerConvite)
   const [tab, setTab] = useState<Tab>(acaoInicial ? 'despesas' : 'relatorios')
-  const [pedidoNovaDespesa, setPedidoNovaDespesa] = useState(acaoInicial ? 1 : 0)
+  // Atalho do ícone do app ("Novo gasto") abre Despesas já com o formulário aberto
+  const [pedidoNovaDespesa] = useState(acaoInicial ? 1 : 0)
+  const [conviteStatus, setConviteStatus] = useState<'pendente' | ResultadoConvite | null>(
+    convitePendente ? 'pendente' : null
+  )
+  const processandoConvite = useRef(false)
 
-  const [segmentoReservas, setSegmentoReservas] = useState<SegmentoReservas>('caixinhas')
-  const previstosApi = useGastosPrevistos(user?.uid)
+  const { perfil, loading: perfilLoading } = usePerfil(user?.uid)
+  const familiaId = perfil?.familiaId ?? user?.uid
+  const familiaApi = useFamilia(familiaId, user?.uid, user?.displayName, user?.email)
+  // Só faz sentido separar familiar/pessoal quando há mais de uma pessoa na família
+  const temFamilia = (familiaApi.familia?.membros.length ?? 0) > 1
+  const familiaDoc = familiaApi.familia
+  const infoFamilia = useMemo<InfoFamilia | undefined>(() => {
+    if (!familiaDoc) return undefined
+    return {
+      ownerUid: familiaDoc.ownerUid,
+      membros: familiaDoc.membros.map((uid) => ({
+        uid, nome: familiaDoc.nomes?.[uid] || familiaDoc.emails?.[uid] || 'Membro',
+      })),
+    }
+  }, [familiaDoc])
+
+  const previstosApi = useGastosPrevistos(familiaId)
   const alertasPrevistos = previstosApi.previstos.filter(precisaAtencao).length
+
+  // Aceita o convite assim que o usuário estiver logado e perfil + família carregados
+  const { aceitarConvite, loading: familiaLoading } = familiaApi
+  useEffect(() => {
+    if (!convitePendente || conviteStatus !== 'pendente' || !user || perfilLoading || familiaLoading) return
+    if (processandoConvite.current) return
+    processandoConvite.current = true
+    aceitarConvite(convitePendente.token, convitePendente.familiaId)
+      .catch(() => 'invalido' as const)
+      .then((resultado) => {
+        setConviteStatus(resultado)
+        window.history.replaceState(null, '', window.location.pathname)
+        if (resultado === 'aceito') setTab('relatorios')
+      })
+  }, [convitePendente, conviteStatus, user, perfilLoading, familiaLoading, aceitarConvite])
 
   const [menuAberto, setMenuAberto] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -62,15 +111,7 @@ export default function App() {
     window.scrollTo({ top: 0 })
   }
 
-  const abrirPrevistos = () => {
-    setSegmentoReservas('previstos')
-    irPara('caixinhas')
-  }
-
-  const novaDespesa = () => {
-    setTab('despesas')
-    setPedidoNovaDespesa((n) => n + 1)
-  }
+  const abrirPrevistos = () => irPara('previstos')
 
   if (loading) {
     return (
@@ -119,12 +160,11 @@ export default function App() {
       <div className="main-layout">
         <aside className="sidebar-desktop">
           <nav className="side-nav">
-            <button className="side-novo" onClick={novaDespesa}><Plus size={17} /><span>Novo gasto</span></button>
             {NAV_ITEMS.map(({ id, label, Icon }) => (
               <button key={id} className={tab === id ? 'active' : ''} onClick={() => irPara(id)}>
                 <Icon size={17} />
                 <span>{label}</span>
-                {id === 'caixinhas' && alertasPrevistos > 0 && <span className="nav-badge-side">{alertasPrevistos}</span>}
+                {id === 'previstos' && alertasPrevistos > 0 && <span className="nav-badge-side">{alertasPrevistos}</span>}
               </button>
             ))}
           </nav>
@@ -133,44 +173,56 @@ export default function App() {
         <main className="app-main">
           <div className="content-limit">
             <InstalarApp />
+            {conviteStatus === 'pendente' && (
+              <div className="banner-convite info">Entrando na família...</div>
+            )}
+            {conviteStatus === 'aceito' && (
+              <div className="banner-convite ok">
+                Você entrou na família! Agora vê os dados compartilhados.
+                <button onClick={() => setConviteStatus(null)}>✕</button>
+              </div>
+            )}
+            {conviteStatus === 'ja-membro' && (
+              <div className="banner-convite ok">
+                Você já faz parte desta família.
+                <button onClick={() => setConviteStatus(null)}>✕</button>
+              </div>
+            )}
+            {conviteStatus === 'invalido' && (
+              <div className="banner-convite erro">
+                Link de convite inválido ou expirado. Peça um novo link a quem convidou você.
+                <button onClick={() => setConviteStatus(null)}>✕</button>
+              </div>
+            )}
+            {conviteStatus === 'tem-membros' && (
+              <div className="banner-convite erro">
+                Você é dono de uma família com outros membros. Remova-os em Conta antes de entrar em outra família.
+                <button onClick={() => setConviteStatus(null)}>✕</button>
+              </div>
+            )}
             {tab === 'relatorios' && (
               <>
                 <EstilosPrevistos />
                 <AlertasPrevistos previstos={previstosApi.previstos} onAbrir={abrirPrevistos} />
-                <RelatoriosPage />
+                <RelatoriosPage familiaId={familiaId} meuUid={user?.uid} temFamilia={temFamilia} familia={infoFamilia} previstos={previstosApi.previstos} />
               </>
             )}
-            {tab === 'despesas' && <DespesasPage pedidoNovaDespesa={pedidoNovaDespesa} />}
-            {tab === 'receitas' && <ReceitasPage />}
-            {tab === 'caixinhas' && (
-              <ReservasPage
-                segmento={segmentoReservas}
-                onSegmento={setSegmentoReservas}
-                previstosApi={previstosApi}
-                alertasPrevistos={alertasPrevistos}
-              />
-            )}
-            {tab === 'conta' && <ContaPage />}
+            {tab === 'despesas' && <DespesasPage pedidoNovaDespesa={pedidoNovaDespesa} familiaId={familiaId} meuUid={user?.uid} temFamilia={temFamilia} familia={infoFamilia} />}
+            {tab === 'receitas' && <ReceitasPage familiaId={familiaId} meuUid={user?.uid} temFamilia={temFamilia} familia={infoFamilia} />}
+            {tab === 'previstos' && <GastosPrevistosPage previstosApi={previstosApi} familiaId={familiaId} meuUid={user?.uid} />}
+            {tab === 'caixinhas' && <CaixinhasPage familiaId={familiaId} meuUid={user?.uid} temFamilia={temFamilia} />}
+            {tab === 'conta' && <ContaPage familiaApi={familiaApi} familiaId={familiaId} meuUid={user?.uid ?? ''} />}
           </div>
         </main>
       </div>
 
-      {/* Barra de abas no rodapé (só no celular) com o "+" no meio */}
+      {/* Barra de abas no rodapé (só no celular) */}
       <nav className="tabbar">
-        {NAV_ITEMS.slice(0, 2).map(({ id, label, Icon }) => (
-          <button key={id} className={tab === id ? 'active' : ''} onClick={() => irPara(id)}>
-            <Icon size={22} strokeWidth={tab === id ? 2.4 : 2} />
-            <span>{label}</span>
-          </button>
-        ))}
-        <button className="tabbar-mais" onClick={novaDespesa} aria-label="Novo gasto">
-          <span className="tabbar-mais-circulo"><Plus size={26} strokeWidth={2.6} /></span>
-        </button>
-        {NAV_ITEMS.slice(2).map(({ id, label, Icon }) => (
+        {NAV_ITEMS.map(({ id, label, Icon }) => (
           <button key={id} className={tab === id ? 'active' : ''} onClick={() => irPara(id)}>
             <span className="tab-ico">
               <Icon size={22} strokeWidth={tab === id ? 2.4 : 2} />
-              {id === 'caixinhas' && alertasPrevistos > 0 && <span className="tab-dot" />}
+              {id === 'previstos' && alertasPrevistos > 0 && <span className="tab-dot" />}
             </span>
             <span>{label}</span>
           </button>
@@ -178,6 +230,16 @@ export default function App() {
       </nav>
 
       <style>{`
+        .banner-convite {
+          display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+          border-radius: 12px; padding: 0.85rem 1rem; font-size: 0.85rem; font-weight: 600;
+          margin-bottom: 0.5rem;
+        }
+        .banner-convite.ok { background: #D4EDDA; color: #155724; }
+        .banner-convite.erro { background: #F8D7DA; color: #721C24; }
+        .banner-convite.info { background: #F1F2F6; color: #636E72; }
+        .banner-convite button { background: none; border: none; cursor: pointer; font-size: 1rem; color: inherit; padding: 0; }
+
         .app-container { min-height: 100vh; display: flex; flex-direction: column; }
 
         /* Cabeçalho fixo que respeita o notch / ilha do iPhone */
@@ -220,12 +282,6 @@ export default function App() {
           font-size: 0.68rem; font-weight: 700; font-family: inherit; cursor: pointer;
         }
         .tabbar button.active { color: #C8A45A; }
-        .tabbar-mais-circulo {
-          width: 50px; height: 50px; border-radius: 16px;
-          background: #C8A45A; color: #FFF;
-          display: flex; align-items: center; justify-content: center;
-          box-shadow: 0 6px 16px rgba(200, 164, 90, 0.4);
-        }
 
         .tab-ico { position: relative; display: flex; }
         .tab-dot { position: absolute; top: -2px; right: -4px; width: 9px; height: 9px; border-radius: 50%; background: #E17055; border: 2px solid #FFF; }
@@ -257,8 +313,6 @@ export default function App() {
         }
         .side-nav button:hover:not(.active) { background: #F1F2F6; color: #636E72; }
         .side-nav button.active { background: #FFFDF7; color: #C8A45A; }
-        .side-nav .side-novo { background: #C8A45A; color: #FFF; margin-bottom: 0.75rem; justify-content: center; }
-        .side-nav .side-novo:hover { background: #B8944A !important; color: #FFF !important; }
 
         @media (min-width: 768px) {
           .app-header { background: #FFF; border-bottom: 1px solid #F1F2F6; padding: 1rem 2rem; }

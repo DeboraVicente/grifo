@@ -1,5 +1,9 @@
 import type { Despesa, Receita, Caixinha, Categoria } from '../../types'
 import { calcFluxoCaixaMensal, fmt } from '../../hooks/useRelatorios'
+import { useState } from 'react'
+import { Search } from 'lucide-react'
+import ComprometimentoRenda, { type DetalheFluxo } from './ComprometimentoRenda'
+import Modal from '../ui/Modal'
 
 interface Props {
   despesas: Despesa[]
@@ -8,6 +12,8 @@ interface Props {
   userId: string
   mes: number
   ano: number
+  /** Liga o total da página de Despesas ao que compromete a renda (cota, previstos) */
+  detalhe?: DetalheFluxo
 }
 
 // Mapeamento de categorias para a regra 50/20/30
@@ -27,7 +33,8 @@ function barraRegra(real: number, meta: number) {
   return { pct, ok }
 }
 
-export default function FluxoCaixaMensal({ despesas, receitas, caixinhas, userId, mes, ano }: Props) {
+export default function FluxoCaixaMensal({ despesas, receitas, caixinhas, userId, mes, ano, detalhe }: Props) {
+  const [verDetalhe, setVerDetalhe] = useState(false)
   const dados = calcFluxoCaixaMensal(despesas, receitas, userId, mes, ano)
   const saldoPositivo = dados.saldo >= 0
 
@@ -76,8 +83,17 @@ export default function FluxoCaixaMensal({ despesas, receitas, caixinhas, userId
           <span className="fc-valor">{fmt(dados.totalReceitas)}</span>
         </div>
         <div className="fluxo-card despesa">
-          <span className="fc-label">Total Despesas</span>
-          <span className="fc-valor">{fmt(dados.totalDespesas)}</span>
+          <span className="fc-label fc-label-acao">
+            Total Despesas
+            {detalhe && (
+              <button className="fc-detalhe" onClick={() => setVerDetalhe(true)}
+                aria-label={detalhe.titulo} title={detalhe.titulo}>
+                <Search size={14} />
+              </button>
+            )}
+          </span>
+          <span className="fc-valor">{fmt(detalhe ? detalhe.totalPagina : dados.totalDespesas)}</span>
+          {detalhe && <span className="fc-sub">comprometido: {fmt(dados.totalDespesas)}</span>}
         </div>
         <div className="fluxo-card caixinha">
           <span className="fc-label">Investido em Caixinhas</span>
@@ -89,6 +105,13 @@ export default function FluxoCaixaMensal({ despesas, receitas, caixinhas, userId
           <span className="fc-valor">{fmt(dados.saldo)}</span>
         </div>
       </div>
+
+      {detalhe && verDetalhe && (
+        <Modal titulo={detalhe.titulo} onFechar={() => setVerDetalhe(false)}>
+          <p className="fc-modal-intro">{detalhe.intro}</p>
+          <ComprometimentoRenda detalhe={detalhe} receitas={dados.totalReceitas} />
+        </Modal>
+      )}
 
       {semDados ? (
         <div className="estado-vazio-rel">Nenhuma movimentação neste mês</div>
@@ -239,6 +262,14 @@ export default function FluxoCaixaMensal({ despesas, receitas, caixinhas, userId
         .fc-label { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #95A5A6; }
         .fc-valor { font-size: 1.3rem; font-weight: 800; color: #2D3436; }
         .fc-sub { font-size: 0.7rem; color: #95A5A6; }
+        .fc-label-acao { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+        .fc-detalhe {
+          display: flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+          border: none; border-radius: 8px; background: rgba(200,164,90,0.12); color: #A8853F; cursor: pointer;
+        }
+        .fc-detalhe:hover { background: #C8A45A; color: #fff; }
+        .fc-modal-intro { font-size: 0.85rem; color: #636E72; line-height: 1.5; margin: 0 0 1rem; }
+
 
         /* Barra proporção */
         .proporcao-wrap { margin-bottom: 1.25rem; }

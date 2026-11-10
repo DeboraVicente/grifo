@@ -7,7 +7,8 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
-const CHAVE_DISPENSADO = 'grifo:instalar-dispensado'
+const CHAVE_DISPENSADO = 'grifo:instalar-dispensado-at'
+const DIAS_ESPERA = 7
 
 function jaInstalado() {
   return window.matchMedia('(display-mode: standalone)').matches ||
@@ -23,7 +24,11 @@ export default function InstalarApp() {
   const [evento, setEvento] = useState<BeforeInstallPromptEvent | null>(null)
   const [mostrarIOS, setMostrarIOS] = useState(false)
   const [dispensado, setDispensado] = useState(() => {
-    try { return localStorage.getItem(CHAVE_DISPENSADO) === '1' } catch { return false }
+    try {
+      const at = localStorage.getItem(CHAVE_DISPENSADO)
+      if (!at) return false
+      return Date.now() - parseInt(at) < DIAS_ESPERA * 86400_000
+    } catch { return false }
   })
 
   useEffect(() => {
@@ -36,7 +41,7 @@ export default function InstalarApp() {
 
   const dispensar = () => {
     setDispensado(true)
-    try { localStorage.setItem(CHAVE_DISPENSADO, '1') } catch { /* ignora */ }
+    try { localStorage.setItem(CHAVE_DISPENSADO, String(Date.now())) } catch { /* ignora */ }
   }
 
   const instalar = async () => {

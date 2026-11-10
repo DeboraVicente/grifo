@@ -19,6 +19,7 @@ export interface Conta {
   id: string
   nome: string
   tipo: TipoConta
+  escopo?: Escopo
   userId: string
   criadoEm: string
 }
@@ -26,6 +27,7 @@ export interface Conta {
 export interface ContaForm {
   nome: string
   tipo: TipoConta
+  escopo?: Escopo
 }
 
 export interface CartaoCredito {
@@ -66,6 +68,13 @@ export interface Parcela {
 }
 
 export type TipoGasto = 'fixo' | 'variavel'
+export type Escopo = 'familiar' | 'pessoal'
+
+/** Membros da família, para escolher quem pagou/recebeu e calcular a divisão */
+export interface InfoFamilia {
+  ownerUid: string
+  membros: { uid: string; nome: string }[]
+}
 
 export interface Despesa {
   id: string
@@ -84,6 +93,11 @@ export interface Despesa {
   dataCompra?: string
   data: string
   observacoes?: string
+  escopo?: Escopo
+  /** uid de quem pagou (despesas familiares; usado na divisão) */
+  pagoPor?: string
+  /** Só em relatórios: despesa projetada a partir de um gasto previsto (id do previsto) */
+  origemPrevisto?: string
   pago: boolean
   listaParcelas: Parcela[]
   adiantamentos: Pagamento[]
@@ -109,6 +123,8 @@ export interface DespesaForm {
   dataCompra: string
   data: string
   observacoes: string
+  escopo?: Escopo
+  pagoPor?: string
   recorrente?: boolean
   recorrenciaMeses?: number
 }
@@ -139,6 +155,7 @@ export interface Caixinha {
   dataObjetivo?: string
   valorAtual: number
   historico: MovimentoCaixinha[]
+  escopo?: Escopo
   userId: string
   criadoEm: string
   atualizadoEm: string
@@ -151,21 +168,9 @@ export interface CaixinhaForm {
   metaMensal?: number
   dataObjetivo?: string
   valorInicial?: number
+  escopo?: Escopo
 }
 
-export type StatusAmizade = 'pendente' | 'aceita' | 'recusada'
-
-export interface Amizade {
-  id: string
-  solicitanteId: string
-  solicitanteNome: string
-  solicitanteEmail: string
-  receptorId: string
-  receptorNome?: string
-  receptorEmail: string
-  status: StatusAmizade
-  criadoEm: string
-}
 
 export type CategoriaReceita = 'salario' | 'freelance' | 'investimento' | 'outros'
 
@@ -176,6 +181,9 @@ export interface Receita {
   data: string
   categoria: CategoriaReceita
   recorrente: boolean
+  escopo?: Escopo
+  /** uid de quem recebeu (receitas familiares; usado na divisão) */
+  recebidoPor?: string
   userId: string
   criadoEm: string
   atualizadoEm: string

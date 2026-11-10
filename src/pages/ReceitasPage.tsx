@@ -1,161 +1,149 @@
-import { useState } from 'react'
-import { Pencil, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, LayoutGrid, TableProperties } from 'lucide-react'
 import { useAuthContext } from '../lib/AuthContext'
 import { useReceitas } from '../hooks/useReceitas'
 import ReceitaForm from '../components/relatorios/ReceitaForm'
+import TabelaReceitas from '../components/receitas/TabelaReceitas'
+import ReceitaCard from '../components/receitas/ReceitaCard'
 import Modal from '../components/ui/Modal'
-import type { Receita } from '../types'
+import { filtrarReceitas, fmtBRL, linhasDoMes, resumoReceitas, type FiltroReceita } from '../lib/receitas'
+import type { Receita, InfoFamilia } from '../types'
 import type { ReceitaForm as ReceitaFormType } from '../hooks/useReceitas'
 
-const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+const ABAS: { id: FiltroReceita; label: string }[] = [
+  { id: 'todas', label: 'Todas' },
+  { id: 'recorrentes', label: 'Recorrentes' },
+  { id: 'avulsas', label: 'Avulsas' },
+]
 
-const CATEGORIA_LABEL: Record<string, string> = {
-  salario: 'Salário', freelance: 'Freelance', investimento: 'Investimento', outros: 'Outros',
+interface Props {
+  familiaId?: string
+  meuUid?: string
+  temFamilia?: boolean
+  familia?: InfoFamilia
 }
 
-export default function ReceitasPage() {
+/**
+ * Receitas: sempre de quem lançou e só ela vê aqui.
+ * Mesmo layout de Despesas: mês, cards/tabela, abas e resumo.
+ */
+export default function ReceitasPage({ familiaId, meuUid, temFamilia = false, familia }: Props) {
   const { user } = useAuthContext()
-  const { receitas, criar, editar, remover } = useReceitas(user?.uid)
-  const [modal, setModal] = useState(false)
-  const [editando, setEditando] = useState<Receita | null>(null)
+  const myUid = meuUid ?? user?.uid
+  const membros = familia?.membros.map((m) => m.uid) ?? []
+  const { receitas, loading, criar, editar, remover } = useReceitas(familiaId ?? myUid, myUid, membros, familia?.ownerUid)
+
+  const hoje = new Date()
+  const [mes, setMes] = useState(hoje.getMonth())
+  const [ano, setAno] = useState(hoje.getFullYear())
+  const [aba, setAba] = useState<FiltroReceita>('todas')
+  const [visualizacao, setVisualizacao] = useState<'cards' | 'tabela'>('tabela')
+  const [modal, setModal] = useState<{ item?: Receita } | null>(null)
+
+  const navegar = (dir: -1 | 1) => {
+    const d = new Date(ano, mes + dir, 1)
+    setMes(d.getMonth()); setAno(d.getFullYear())
+  }
+
+  const linhasMes = useMemo(() => linhasDoMes(receitas, mes, ano), [receitas, mes, ano])
+  const linhas = useMemo(() => filtrarReceitas(linhasMes, aba), [linhasMes, aba])
+  const resumo = resumoReceitas(linhasMes)
 
   const handleSalvar = async (form: ReceitaFormType) => {
-    if (editando) await editar(editando.id, form)
+    if (modal?.item) await editar(modal.item.id, form)
     else await criar(form)
-    setModal(false)
-    setEditando(null)
+    setModal(null)
   }
-  const handleEditar = (r: Receita) => { setEditando(r); setModal(true) }
-  const handleRemover = async (id: string) => {
-    if (!confirm('Remover esta receita?')) return
-    await remover(id)
+  const handleRemover = async (r: Receita) => {
+    if (!confirm(`Remover a receita "${r.nome}"?`)) return
+    await remover(r.id)
   }
-
-  const totalRecorrente = receitas.filter(r => r.recorrente).reduce((s, r) => s + r.valor, 0)
-  const totalMes = receitas.filter(r => !r.recorrente).reduce((s, r) => s + r.valor, 0)
 
   return (
     <div className="receitas-page">
-      <div className="rec-header">
-        <div>
-          <h1 className="rec-titulo">Receitas</h1>
-          <p className="rec-subtitulo">Gerencie suas entradas de dinheiro</p>
+      {/* Linha 1: título + mês + cards/tabela */}
+      <div className="ph-row1">
+        <h1 className="page-titulo">Receitas</h1>
+        <div className="mes-nav">
+          <button className="nav-btn" onClick={() => navegar(-1)} aria-label="Mês anterior"><ChevronLeft size={16} /></button>
+          <span className="nav-label">{MESES_PT[mes]} {ano}</span>
+          <button className="nav-btn" onClick={() => navegar(1)} aria-label="Próximo mês"><ChevronRight size={16} /></button>
         </div>
-        <button className="btn-nova-receita" onClick={() => { setEditando(null); setModal(true) }}>
-          + Receita
-        </button>
-      </div>
-
-      {receitas.length > 0 && (
-        <div className="rec-resumo">
-          <div className="rec-resumo-item">
-            <span className="rec-resumo-label">Recorrente mensal</span>
-            <span className="rec-resumo-valor">{fmt(totalRecorrente)}</span>
-          </div>
-          {totalMes > 0 && (
-            <div className="rec-resumo-item">
-              <span className="rec-resumo-label">Avulso registrado</span>
-              <span className="rec-resumo-valor rec-avulso">{fmt(totalMes)}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {receitas.length === 0 ? (
-        <div className="rec-vazio">
-          <p>Nenhuma receita registrada.</p>
-          <button className="btn-add-vazio" onClick={() => setModal(true)}>
-            Adicionar primeira receita
+        <div className="toggle-view">
+          <button className={`toggle-btn ${visualizacao === 'cards' ? 'ativo' : ''}`} onClick={() => setVisualizacao('cards')} title="Cards">
+            <LayoutGrid size={16} />
+          </button>
+          <button className={`toggle-btn ${visualizacao === 'tabela' ? 'ativo' : ''}`} onClick={() => setVisualizacao('tabela')} title="Tabela">
+            <TableProperties size={16} />
           </button>
         </div>
+      </div>
+
+      {/* Linha 2: abas + nova */}
+      <div className="ph-row2">
+        <div className="tabs-nav">
+          {ABAS.map(({ id, label }) => (
+            <button key={id} className={`tab-btn ${aba === id ? 'ativo' : ''}`} onClick={() => setAba(id)}>{label}</button>
+          ))}
+        </div>
+        <button className="btn-criar" onClick={() => setModal({})}>+ Nova</button>
+      </div>
+
+      {/* Resumo do mês */}
+      <div className="rp-resumo">
+        <div className="rp-metrica destaque">
+          <span>Recebido no mês</span>
+          <strong>{fmtBRL(resumo.total)}</strong>
+        </div>
+        <div className="rp-metrica">
+          <span>Recorrente</span>
+          <strong>{fmtBRL(resumo.recorrente)}</strong>
+        </div>
+        <div className="rp-metrica">
+          <span>Avulso</span>
+          <strong>{fmtBRL(resumo.avulso)}</strong>
+        </div>
+      </div>
+
+      {loading ? null : linhas.length === 0 ? (
+        <div className="rp-vazio">
+          <p>{linhasMes.length === 0 ? `Nenhuma receita em ${MESES_PT[mes].toLowerCase()}.` : 'Nenhuma receita nesta aba.'}</p>
+          <button className="btn-criar-vazio" onClick={() => setModal({})}>Adicionar receita</button>
+        </div>
+      ) : visualizacao === 'tabela' ? (
+        <TabelaReceitas linhas={linhas} onEditar={(r) => setModal({ item: r })} onRemover={handleRemover} />
       ) : (
-        <div className="rec-lista">
-          {receitas.map((r) => (
-            <div key={r.id} className="rec-item">
-              <div className="rec-item-info">
-                <span className="rec-item-nome">{r.nome}</span>
-                <span className="rec-item-meta">
-                  {CATEGORIA_LABEL[r.categoria] ?? r.categoria}
-                  {r.recorrente ? ' · Recorrente' : ` · ${new Date(r.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`}
-                </span>
-              </div>
-              <div className="rec-item-right">
-                <span className="rec-item-valor">{fmt(r.valor)}</span>
-                <div className="rec-item-acoes">
-                  <button onClick={() => handleEditar(r)}><Pencil size={13} /></button>
-                  <button className="rec-del" onClick={() => handleRemover(r.id)}><X size={13} /></button>
-                </div>
-              </div>
-            </div>
+        <div className="rp-cards">
+          {linhas.map(({ receita, dataNoMes }) => (
+            <ReceitaCard key={receita.id} receita={receita} dataNoMes={dataNoMes}
+              onEditar={() => setModal({ item: receita })} onRemover={() => handleRemover(receita)} />
           ))}
         </div>
       )}
 
       {modal && (
-        <Modal
-          titulo={editando ? 'Editar receita' : 'Nova receita'}
-          onFechar={() => { setModal(false); setEditando(null) }}
-        >
-          <ReceitaForm
-            inicial={editando ?? undefined}
-            onSalvar={handleSalvar}
-            onCancelar={() => { setModal(false); setEditando(null) }}
-          />
+        <Modal titulo={modal.item ? 'Editar receita' : 'Nova receita'} onFechar={() => setModal(null)}>
+          <ReceitaForm inicial={modal.item} onSalvar={handleSalvar} onCancelar={() => setModal(null)} emFamilia={temFamilia} />
         </Modal>
       )}
 
       <style>{`
-        .receitas-page { display: flex; flex-direction: column; gap: 1.25rem; }
-
-        .rec-header { display: flex; justify-content: space-between; align-items: flex-start; }
-        .rec-titulo { font-size: 1.4rem; font-weight: 900; color: #2D3436; }
-        .rec-subtitulo { font-size: 0.8rem; color: #95A5A6; margin-top: 2px; }
-        .btn-nova-receita {
-          background: #C8A45A; color: #fff; border: none; border-radius: 10px;
-          padding: 0.6rem 1rem; font-size: 0.82rem; font-weight: 700;
-          cursor: pointer; white-space: nowrap; font-family: inherit;
+        .receitas-page { display: flex; flex-direction: column; gap: 1rem; }
+        .rp-resumo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+        .rp-metrica {
+          background: #fff; border: 1px solid #F1F2F6; border-radius: 14px;
+          padding: 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.03);
         }
-
-        .rec-resumo {
-          display: flex; gap: 1rem;
-          background: #F8F9FA; border: 1px solid #F1F2F6;
-          border-radius: 14px; padding: 1rem 1.25rem;
-        }
-        .rec-resumo-item { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; }
-        .rec-resumo-label { color: #95A5A6; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-        .rec-resumo-valor { color: #2ECC71; font-size: 1.2rem; font-weight: 800; }
-        .rec-avulso { color: #C8A45A; }
-
-        .rec-vazio { text-align: center; padding: 4rem 1rem; color: #BDC3C7; }
-        .btn-add-vazio {
-          background: #fff; border: 1px dashed #D1D8E0; color: #95A5A6;
-          border-radius: 10px; padding: 0.75rem 1.5rem; font-size: 0.85rem;
-          cursor: pointer; margin-top: 1rem; font-family: inherit;
-        }
-
-        .rec-lista { display: flex; flex-direction: column; gap: 0.5rem; }
-        .rec-item {
-          display: flex; align-items: center; gap: 0.75rem;
-          background: #fff; border: 1px solid #F1F2F6;
-          border-radius: 12px; padding: 0.85rem 1rem;
-        }
-        .rec-item-info { flex: 1; min-width: 0; }
-        .rec-item-nome { display: block; font-size: 0.9rem; font-weight: 700; color: #2D3436; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .rec-item-meta { font-size: 0.72rem; color: #95A5A6; }
-        .rec-item-right { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
-        .rec-item-valor { font-size: 0.95rem; font-weight: 800; color: #2ECC71; }
-        .rec-item-acoes { display: flex; gap: 0.35rem; }
-        .rec-item-acoes button {
-          background: #F1F2F6; border: none; border-radius: 6px;
-          padding: 0.3rem 0.5rem; cursor: pointer; color: #636e72;
-          display: flex; align-items: center; font-family: inherit;
-        }
-        .rec-del { color: #E74C3C !important; }
-
+        .rp-metrica span { font-size: 0.68rem; font-weight: 700; color: #95A5A6; text-transform: uppercase; letter-spacing: 0.05em; }
+        .rp-metrica strong { font-size: 1.15rem; font-weight: 800; color: #2D3436; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rp-metrica.destaque strong { color: #27AE60; }
+        .rp-cards { display: flex; flex-direction: column; gap: 0.75rem; }
+        .rp-vazio { text-align: center; padding: 3rem 1rem; color: #95A5A6; font-size: 0.9rem; }
         @media (max-width: 480px) {
-          .rec-header { flex-direction: column; gap: 0.75rem; }
-          .btn-nova-receita { width: 100%; text-align: center; }
-          .rec-resumo { flex-direction: column; gap: 0.75rem; }
+          .rp-resumo { grid-template-columns: 1fr 1fr; }
+          .rp-metrica.destaque { grid-column: 1 / -1; }
         }
       `}</style>
     </div>

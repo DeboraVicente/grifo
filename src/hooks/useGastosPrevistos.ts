@@ -4,6 +4,7 @@ import {
   addDoc, updateDoc, deleteDoc, doc, serverTimestamp, Timestamp,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { registrarErroLeitura } from '../lib/erros'
 import { hojeISO, somarMeses } from '../lib/previstos'
 import type { GastoPrevisto, GastoPrevistoForm, MovimentoPrevisto } from '../types'
 
@@ -35,7 +36,7 @@ export function useGastosPrevistos(userId: string | undefined) {
       setPrevistos(data)
       setLoading(false)
     }, (err) => {
-      console.error('Gastos previstos:', err)
+      registrarErroLeitura('Gastos previstos', err)
       setLoading(false)
     })
     return unsub

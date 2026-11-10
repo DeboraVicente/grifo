@@ -1,6 +1,9 @@
 import { useState, useMemo } from 'react'
 import { CheckCircle2, Clock, ChevronUp, ChevronDown, ChevronsUpDown, X } from 'lucide-react'
-import type { Despesa, CartaoCredito, Conta } from '../../types'
+import type { Despesa, CartaoCredito, Conta, InfoFamilia } from '../../types'
+import EtiquetaEscopo from '../familia/EtiquetaEscopo'
+import SelectEscopo from '../familia/SelectEscopo'
+import type { VisaoEscopo } from '../../lib/escopo'
 import CategoryIcon from '../ui/CategoryIcon'
 
 export type TabTipo = 'tudo' | 'recorrentes' | 'parcelados' | 'compartilhados'
@@ -14,6 +17,10 @@ interface Props {
   ano: number
   mes: number
   tab: TabTipo
+  familia?: InfoFamilia
+  /** Filtro de escopo (Família/Pessoal), mostrado quando informado */
+  escopo?: VisaoEscopo
+  onEscopo?: (v: VisaoEscopo) => void
   onPagarParcela: (despesa: Despesa, numeroParcela: number) => void
 }
 
@@ -49,7 +56,7 @@ function IconeOrdem({ col, ordemCol, ordemDir }: { col: ColOrdem; ordemCol: ColO
   return ordemDir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />
 }
 
-export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, tab, onPagarParcela }: Props) {
+export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, tab, familia, escopo = 'tudo', onEscopo, onPagarParcela }: Props) {
   const [pagina, setPagina] = useState(0)
   const [ordemCol, setOrdemCol] = useState<ColOrdem>('status')
   const [ordemDir, setOrdemDir] = useState<DirOrdem>('asc')
@@ -178,6 +185,8 @@ export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, ta
           <option value="variavel">Variável</option>
         </select>
 
+        {onEscopo && <SelectEscopo valor={escopo} onChange={onEscopo} />}
+
         {metodosDisponiveis.length > 1 && (
           <select className="filtro-select" value={filtros.metodo} onChange={e => setFiltro('metodo', e.target.value)}>
             <option value="todos">Método: Todos</option>
@@ -237,6 +246,7 @@ export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, ta
                           </div>
                           <div className="desc-info">
                             <span className="desc-nome">{d.nome}</span>
+                            <EtiquetaEscopo despesa={d} familia={familia} />
                             {d.minhaParte !== undefined && d.minhaParte !== null && <span className="desc-parte">sua parte: {fmt(l.valorParcela)}</span>}
                           </div>
                         </div>

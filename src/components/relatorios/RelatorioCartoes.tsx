@@ -1,4 +1,4 @@
-import { CreditCard, Clock } from 'lucide-react'
+import { CreditCard } from 'lucide-react'
 import type { Despesa, CartaoCredito } from '../../types'
 
 interface Props {
@@ -31,19 +31,17 @@ export default function RelatorioCartoes({ despesas, cartoes }: Props) {
       (d) => d.cartaoId === cartao.id && d.metodoPagamento === 'credito' && !d.pago
     )
     const comprometidoTotal = despesasCartao.reduce((s, d) => s + calcularComprometido(d), 0)
-    const comprometidoPendente = 0
-    const pendentesAmigo: typeof despesasCartao = []
 
     const limite = cartao.limite ?? 0
     const disponivel = limite > 0 ? Math.max(0, limite - comprometidoTotal) : null
     const pctUsado = limite > 0 ? Math.min(100, (comprometidoTotal / limite) * 100) : null
 
-    return { cartao, pendentesAmigo, comprometidoPendente, comprometidoTotal, disponivel, pctUsado }
+    return { cartao, comprometidoTotal, disponivel, pctUsado }
   })
 
   return (
     <div className="rc-container">
-      {cartoesDados.map(({ cartao, pendentesAmigo, comprometidoPendente, comprometidoTotal, disponivel, pctUsado }) => (
+      {cartoesDados.map(({ cartao, comprometidoTotal, disponivel, pctUsado }) => (
         <div key={cartao.id} className="rc-cartao">
           <div className="rc-cartao-header">
             <div className="rc-cartao-info">
@@ -103,41 +101,28 @@ export default function RelatorioCartoes({ despesas, cartoes }: Props) {
             </div>
           </div>
 
-          {comprometidoPendente > 0 && (
-            <div className="rc-pendente-aviso">
-              <Clock size={18} className="rc-pendente-icon" />
-              <div>
-                <span className="rc-pendente-titulo">
-                  {fmt(comprometidoPendente)} aguardando aprovação
-                </span>
-                <span className="rc-pendente-sub">
-                  {pendentesAmigo.length} despesa{pendentesAmigo.length > 1 ? 's' : ''} para amigo{pendentesAmigo.length > 1 ? 's' : ''} · já incluso no comprometido
-                </span>
-              </div>
-            </div>
-          )}
         </div>
       ))}
 
       <style>{`
-        .rc-container { display: flex; flex-direction: column; gap: 1.25rem; }
+        /* Grade: dois (ou mais) cartões por linha conforme a largura; um por linha no celular */
+        .rc-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 1rem; }
 
         .rc-cartao {
           background: #F8F9FA; border: 1px solid #F1F2F6;
-          border-radius: 16px; padding: 1.25rem;
-          display: flex; flex-direction: column; gap: 1rem;
+          border-radius: 16px; padding: 1rem 1.1rem;
+          display: flex; flex-direction: column; gap: 0.75rem; min-width: 0;
         }
         .rc-cartao-header { display: flex; align-items: flex-start; justify-content: space-between; }
         .rc-cartao-info { display: flex; flex-direction: column; gap: 0.2rem; }
-        .rc-cartao-nome { color: #2D3436; font-size: 1rem; font-weight: 800; }
+        .rc-cartao-nome { color: #2D3436; font-size: 0.95rem; font-weight: 800; }
         .rc-cartao-banco { color: #95A5A6; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
         .rc-emoji { color: #BDC3C7; flex-shrink: 0; }
 
-        .rc-valores { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; }
-        @media (max-width: 480px) { .rc-valores { grid-template-columns: 1fr 1fr; } }
-        .rc-val-item { display: flex; flex-direction: column; gap: 0.2rem; }
+        .rc-valores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+        .rc-val-item { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
         .rc-val-label { color: #95A5A6; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-        .rc-val-num { color: #2D3436; font-size: 0.9rem; font-weight: 800; }
+        .rc-val-num { color: #2D3436; font-size: 0.85rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
         .rc-comprometido { color: #E67E22; }
         .rc-disponivel { color: #27AE60; }
         .rc-esgotado { color: #E74C3C; }
@@ -152,21 +137,13 @@ export default function RelatorioCartoes({ despesas, cartoes }: Props) {
         .rc-dias {
           display: flex; align-items: center; gap: 0;
           background: #fff; border: 1px solid #F1F2F6;
-          border-radius: 10px; padding: 0.75rem 1rem;
+          border-radius: 10px; padding: 0.6rem 0.85rem;
         }
         .rc-dia-item { display: flex; flex-direction: column; gap: 0.15rem; flex: 1; }
-        .rc-dia-sep { width: 1px; background: #F1F2F6; align-self: stretch; margin: 0 1rem; }
+        .rc-dia-sep { width: 1px; background: #F1F2F6; align-self: stretch; margin: 0 0.75rem; }
         .rc-dia-label { color: #95A5A6; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
         .rc-dia-val { color: #2D3436; font-size: 0.88rem; font-weight: 700; }
 
-        .rc-pendente-aviso {
-          display: flex; align-items: flex-start; gap: 0.75rem;
-          background: rgba(243,156,18,0.08); border: 1px solid rgba(243,156,18,0.2);
-          border-radius: 10px; padding: 0.85rem;
-        }
-        .rc-pendente-icon { color: #E67E22; flex-shrink: 0; display: flex; align-items: center; }
-        .rc-pendente-titulo { display: block; color: #E67E22; font-size: 0.82rem; font-weight: 700; }
-        .rc-pendente-sub { display: block; color: #95A5A6; font-size: 0.72rem; margin-top: 0.1rem; }
       `}</style>
     </div>
   )

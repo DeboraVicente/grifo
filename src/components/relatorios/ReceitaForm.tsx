@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Lock } from 'lucide-react'
 import type { Receita, CategoriaReceita } from '../../types'
 import type { ReceitaForm as ReceitaFormType } from '../../hooks/useReceitas'
 
@@ -6,6 +7,8 @@ interface Props {
   inicial?: Receita
   onSalvar: (form: ReceitaFormType) => void
   onCancelar: () => void
+  /** Mostra o aviso de privacidade (quando há família) */
+  emFamilia?: boolean
 }
 
 const CATEGORIAS: { value: CategoriaReceita; label: string }[] = [
@@ -15,7 +18,7 @@ const CATEGORIAS: { value: CategoriaReceita; label: string }[] = [
   { value: 'outros', label: 'Outros' },
 ]
 
-export default function ReceitaForm({ inicial, onSalvar, onCancelar }: Props) {
+export default function ReceitaForm({ inicial, onSalvar, onCancelar, emFamilia }: Props) {
   const hoje = new Date().toISOString().split('T')[0]
   const [form, setForm] = useState<ReceitaFormType>({
     nome: inicial?.nome ?? '',
@@ -39,6 +42,9 @@ export default function ReceitaForm({ inicial, onSalvar, onCancelar }: Props) {
 
   return (
     <form onSubmit={handleSubmit}>
+      {emFamilia && <p className="rf-privado">
+        <Lock size={12} /> Só você vê suas receitas. Na família, elas entram apenas no cálculo do rateio.
+      </p>}
       <div className="rf-field">
         <label>Nome</label>
         <input
@@ -99,6 +105,7 @@ export default function ReceitaForm({ inicial, onSalvar, onCancelar }: Props) {
       </div>
 
       <style>{`
+        .rf-privado { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 1rem; font-size: 0.78rem; color: #95A5A6; }
         .rf-field { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
         .rf-field label { font-size: 0.75rem; font-weight: 600; color: #636e72; text-transform: uppercase; letter-spacing: 0.05em; }
         .rf-field input, .rf-field select {

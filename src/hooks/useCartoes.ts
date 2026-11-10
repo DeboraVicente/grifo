@@ -1,19 +1,28 @@
 import { useState, useEffect } from 'react'
 import {
   collection, query, where, orderBy, onSnapshot,
-  addDoc, updateDoc, deleteDoc, doc, getDocs, limit,
+  addDoc, updateDoc, deleteDoc, doc,
   serverTimestamp, Timestamp, deleteField,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { registrarErroLeitura } from '../lib/erros'
+import { chavePessoal } from '../lib/escopo'
+import { migrarParaPrivado, despesaUsa } from '../lib/privados'
 import type { CartaoCredito, CartaoCreditoForm } from '../types'
 
 export type RemoverCartaoResultado = 'ok' | 'vinculado' | 'erro'
 
-export function useCartoes(userId: string | undefined) {
+/**
+ * Cartões de crédito do usuário. São sempre privados (chave p_<uid>).
+ * `familiaId` só é usado para checar se alguma despesa da família usa o cartão antes de excluir.
+ */
+export function useCartoes(meuUid: string | undefined, familiaId?: string) {
   const [cartoes, setCartoes] = useState<CartaoCredito[]>([])
+  const userId = meuUid ? chavePessoal(meuUid) : undefined
 
   useEffect(() => {
-    if (!userId) return
+    if (!userId || !meuUid) return
+    migrarParaPrivado('cartoes', meuUid)
     const q = query(
       collection(db, 'cartoes'),
       where('userId', '==', userId),
@@ -25,8 +34,8 @@ export function useCartoes(userId: string | undefined) {
         ...d.data(),
         criadoEm: (d.data().criadoEm as Timestamp)?.toDate().toISOString() ?? '',
       })) as CartaoCredito[])
-    })
-  }, [userId])
+    }, (err) => registrarErroLeitura('Cartões', err))
+  }, [userId, meuUid])
 
   const criar = async (form: CartaoCreditoForm) => {
     if (!userId) return
@@ -50,15 +59,9 @@ export function useCartoes(userId: string | undefined) {
 
   const remover = async (id: string): Promise<RemoverCartaoResultado> => {
     try {
-      // Verifica se há despesas vinculadas a este cartão
-      const q = query(
-        collection(db, 'despesas'),
-        where('userId', '==', userId),
-        where('cartaoId', '==', id),
-        limit(1)
-      )
-      const snap = await getDocs(q)
-      if (!snap.empty) return 'vinculado'
+      // Verifica se há despesas vinculadas a este cartão (da família, pessoais ou antigas)
+      const donos = [...new Set([userId, meuUid, familiaId].filter(Boolean) as string[])]
+      if (await despesaUsa('cartaoId', id, donos)) return 'vinculado'
 
       await deleteDoc(doc(db, 'cartoes', id))
       return 'ok'

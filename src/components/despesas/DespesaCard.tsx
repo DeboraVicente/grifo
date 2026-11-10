@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Trash2, CheckCircle2, Circle, Pencil, AlertCircle, SplitSquareHorizontal } from 'lucide-react'
-import type { Despesa } from '../../types'
+import type { Despesa, InfoFamilia } from '../../types'
+import EtiquetaEscopo from '../familia/EtiquetaEscopo'
 import CategoryIcon from '../ui/CategoryIcon'
 
 const METODO_LABEL: Record<string, string> = {
@@ -10,6 +11,7 @@ const METODO_LABEL: Record<string, string> = {
 interface Props {
   despesa: Despesa
   cartaoLabel?: string
+  familia?: InfoFamilia
   onEditar: () => void
   onRemover: () => void
   onPagarParcela: (numeroParcela: number) => void
@@ -25,7 +27,7 @@ const hoje = new Date()
 hoje.setHours(0, 0, 0, 0)
 
 export default function DespesaCard({
-  despesa, cartaoLabel, onEditar, onRemover, onPagarParcela, onRemoverPagamento, onAdiantar,
+  despesa, cartaoLabel, familia, onEditar, onRemover, onPagarParcela, onRemoverPagamento, onAdiantar,
 }: Props) {
   const [expandido, setExpandido] = useState(false)
   const PARCELAS_POR_PAGINA = 5
@@ -68,6 +70,7 @@ export default function DespesaCard({
 
         <div className="card-info">
           <div className="card-nome">{despesa.nome}</div>
+          <EtiquetaEscopo despesa={despesa} familia={familia} />
           <div className="card-meta">
             {despesa.dataCompra ? (
               <>

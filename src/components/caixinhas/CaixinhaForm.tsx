@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { Caixinha, CaixinhaForm as CaixinhaFormType, CaixinhaCategoria } from '../../types'
+import { Users, Lock } from 'lucide-react'
+import type { Caixinha, CaixinhaForm as CaixinhaFormType, CaixinhaCategoria, Escopo } from '../../types'
 
 const CATEGORIAS: { value: CaixinhaCategoria; label: string }[] = [
   { value: 'emergencia', label: 'Emergência' },
@@ -15,11 +16,12 @@ interface Props {
   inicial?: Caixinha
   onSalvar: (form: CaixinhaFormType) => Promise<void>
   onCancelar: () => void
+  emFamilia?: boolean
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-const FORM_VAZIO: CaixinhaFormType = { nome: '', categoria: 'outros', valorMeta: undefined, metaMensal: undefined, dataObjetivo: undefined }
+const FORM_VAZIO: CaixinhaFormType = { nome: '', categoria: 'outros', valorMeta: undefined, metaMensal: undefined, dataObjetivo: undefined, escopo: 'familiar' }
 
 function mesesAte(dataStr: string): number {
   const alvo = new Date(dataStr + 'T12:00:00')
@@ -27,10 +29,10 @@ function mesesAte(dataStr: string): number {
   return Math.max(1, (alvo.getFullYear() - hoje.getFullYear()) * 12 + (alvo.getMonth() - hoje.getMonth()))
 }
 
-export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
+export default function CaixinhaForm({ inicial, onSalvar, onCancelar, emFamilia }: Props) {
   const [form, setForm] = useState<CaixinhaFormType>(
     inicial
-      ? { nome: inicial.nome, categoria: inicial.categoria, valorMeta: inicial.valorMeta, metaMensal: inicial.metaMensal, dataObjetivo: inicial.dataObjetivo }
+      ? { nome: inicial.nome, categoria: inicial.categoria, valorMeta: inicial.valorMeta, metaMensal: inicial.metaMensal, dataObjetivo: inicial.dataObjetivo, escopo: (inicial.escopo as Escopo) ?? 'familiar' }
       : FORM_VAZIO
   )
   const [temMeta, setTemMeta] = useState(!!inicial?.valorMeta)
@@ -64,6 +66,20 @@ export default function CaixinhaForm({ inicial, onSalvar, onCancelar }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="caixinha-form">
+      {emFamilia && (
+        <div className="tipo-tabs escopo-tabs" style={{ marginBottom: '0.5rem' }}>
+          <button type="button"
+            className={`tipo-tab-btn ${form.escopo !== 'pessoal' ? 'active' : ''}`}
+            onClick={() => set('escopo', 'familiar')}>
+            <Users size={13} /> Familiar
+          </button>
+          <button type="button"
+            className={`tipo-tab-btn ${form.escopo === 'pessoal' ? 'active' : ''}`}
+            onClick={() => set('escopo', 'pessoal')}>
+            <Lock size={13} /> Pessoal
+          </button>
+        </div>
+      )}
       <div className="field">
         <label>Nome da caixinha</label>
         <input type="text" placeholder="Ex: Viagem para o nordeste" value={form.nome}
