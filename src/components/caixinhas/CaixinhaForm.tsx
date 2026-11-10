@@ -33,7 +33,8 @@ export default function CaixinhaForm({ inicial, onSalvar, onCancelar, emFamilia 
   const [form, setForm] = useState<CaixinhaFormType>(
     inicial
       ? { nome: inicial.nome, categoria: inicial.categoria, valorMeta: inicial.valorMeta, metaMensal: inicial.metaMensal, dataObjetivo: inicial.dataObjetivo, escopo: (inicial.escopo as Escopo) ?? 'familiar' }
-      : FORM_VAZIO
+      // Nova caixinha em família já começa como Pessoal
+      : { ...FORM_VAZIO, escopo: emFamilia ? 'pessoal' : 'familiar' }
   )
   const [temMeta, setTemMeta] = useState(!!inicial?.valorMeta)
   const [temMetaMensal, setTemMetaMensal] = useState(!!inicial?.metaMensal)

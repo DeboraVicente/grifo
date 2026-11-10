@@ -10,6 +10,7 @@ import ReservarForm from '../components/previstos/ReservarForm'
 import ConcluirForm, { type DadosConclusao } from '../components/previstos/ConcluirForm'
 import EstilosPrevistos from '../components/previstos/estilos'
 import Modal from '../components/ui/Modal'
+import { useEhMobile } from '../components/ui/ListaMobile'
 import { fmtBRL, precisaAtencao, resumir } from '../lib/previstos'
 import type { GastoPrevisto, GastoPrevistoForm as FormType } from '../types'
 
@@ -37,6 +38,9 @@ export default function GastosPrevistosPage({ previstosApi, familiaId, meuUid }:
   const [sel, setSel] = useState<GastoPrevisto | null>(null)
   const [aba, setAba] = useState<AbaPrevistos>('todos')
   const [visualizacao, setVisualizacao] = useState<'cards' | 'tabela'>('tabela')
+  // No celular só existe a lista nova (que já traz os totais)
+  const ehMobile = useEhMobile()
+  const modoVisual = ehMobile ? 'tabela' : visualizacao
   const qtdAtencao = previstos.filter(precisaAtencao).length
 
   const abrir = (tipo: ModalTipo, g: GastoPrevisto | null = null) => { setSel(g); setModal(tipo) }
@@ -89,6 +93,7 @@ export default function GastosPrevistosPage({ previstosApi, familiaId, meuUid }:
       {/* Linha 1: título + cards/tabela */}
       <div className="ph-row1">
         <h1 className="page-titulo">Previstos</h1>
+        {!ehMobile && (
         <div className="toggle-view">
           <button className={`toggle-btn ${visualizacao === 'cards' ? 'ativo' : ''}`} onClick={() => setVisualizacao('cards')} title="Cards">
             <LayoutGrid size={16} />
@@ -97,6 +102,7 @@ export default function GastosPrevistosPage({ previstosApi, familiaId, meuUid }:
             <TableProperties size={16} />
           </button>
         </div>
+        )}
       </div>
 
       {/* Linha 2: abas + nova */}
@@ -112,6 +118,7 @@ export default function GastosPrevistosPage({ previstosApi, familiaId, meuUid }:
       </div>
 
       {/* Resumo */}
+      {!ehMobile && (
       <div className="pp-resumo">
         <div className="pp-metrica destaque">
           <span>Reservar este mês</span>
@@ -127,6 +134,7 @@ export default function GastosPrevistosPage({ previstosApi, familiaId, meuUid }:
           {proximo && <small>{new Date(proximo.proximaData + 'T12:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</small>}
         </div>
       </div>
+      )}
 
       {loading ? (
         <div className="gp-vazio">Carregando...</div>
@@ -138,7 +146,7 @@ export default function GastosPrevistosPage({ previstosApi, familiaId, meuUid }:
         </div>
       ) : lista.length === 0 ? (
         <div className="gp-vazio"><p>Nenhum previsto nesta aba.</p></div>
-      ) : visualizacao === 'tabela' ? (
+      ) : modoVisual === 'tabela' ? (
         <TabelaPrevistos previstos={lista}
           onReservar={(g) => abrir('reservar', g)} onConcluir={(g) => abrir('concluir', g)}
           onEditar={(g) => abrir('editar', g)} onRemover={excluir} />

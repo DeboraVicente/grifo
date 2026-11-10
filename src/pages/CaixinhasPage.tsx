@@ -5,7 +5,7 @@ import { useAuthContext } from '../lib/AuthContext'
 import CaixinhaCard from '../components/caixinhas/CaixinhaCard'
 import CaixinhaForm from '../components/caixinhas/CaixinhaForm'
 import MetasInvestimento from '../components/caixinhas/MetasInvestimento'
-import PagamentoForm from '../components/despesas/PagamentoForm'
+import MovimentoForm from '../components/caixinhas/MovimentoForm'
 import Modal from '../components/ui/Modal'
 import type { Caixinha, CaixinhaForm as CaixinhaFormType } from '../types'
 
@@ -17,7 +17,7 @@ const MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
 
 export default function CaixinhasPage({ familiaId, meuUid, temFamilia = false }: { familiaId?: string; meuUid?: string; temFamilia?: boolean }) {
   const { user } = useAuthContext()
-  const { caixinhas, loading, criar, editar, remover, adicionarMovimento } = useCaixinhas(familiaId ?? user?.uid, meuUid ?? user?.uid)
+  const { caixinhas, loading, criar, editar, remover, adicionarMovimento, removerMovimento } = useCaixinhas(familiaId ?? user?.uid, meuUid ?? user?.uid)
 
   const hoje = new Date()
   const [modal, setModal] = useState<ModalTipo>(null)
@@ -113,6 +113,7 @@ export default function CaixinhasPage({ familiaId, meuUid, temFamilia = false }:
               onDepositar={() => { setSelecionada(c); setModal('depositar') }}
               onRetirar={() => { setSelecionada(c); setModal('retirar') }}
               onRendimento={() => { setSelecionada(c); setModal('rendimento') }}
+              onRemoverMovimento={(m) => removerMovimento(c.id, m.id)}
             />
           ))}
         </div>
@@ -128,23 +129,17 @@ export default function CaixinhasPage({ familiaId, meuUid, temFamilia = false }:
           <CaixinhaForm inicial={selecionada} onSalvar={handleEditar} onCancelar={fecharModal} emFamilia={temFamilia} />
         </Modal>
       )}
-      {modal === 'depositar' && selecionada && (
-        <Modal titulo={`Depositar em "${selecionada.nome}"`} onFechar={fecharModal}>
-          <PagamentoForm tipo="pagamento" valorRestante={selecionada.valorMeta ? selecionada.valorMeta - selecionada.valorAtual : 0}
-            onSalvar={handleMovimento} onCancelar={fecharModal} />
-        </Modal>
-      )}
-      {modal === 'retirar' && selecionada && (
-        <Modal titulo={`Retirar de "${selecionada.nome}"`} onFechar={fecharModal}>
-          <PagamentoForm tipo="adiantamento" valorRestante={selecionada.valorAtual}
-            max={selecionada.valorAtual}
-            onSalvar={handleMovimento} onCancelar={fecharModal} />
-        </Modal>
-      )}
-      {modal === 'rendimento' && selecionada && (
-        <Modal titulo={`Rendimento em "${selecionada.nome}"`} onFechar={fecharModal}>
-          <PagamentoForm tipo="adiantamento" valorRestante={0}
-            onSalvar={handleMovimento} onCancelar={fecharModal} />
+      {(modal === 'depositar' || modal === 'retirar' || modal === 'rendimento') && selecionada && (
+        <Modal
+          titulo={modal === 'depositar' ? `Depositar em "${selecionada.nome}"` : modal === 'retirar' ? `Retirar de "${selecionada.nome}"` : `Rendimento em "${selecionada.nome}"`}
+          onFechar={fecharModal}
+        >
+          <MovimentoForm
+            tipo={modal === 'depositar' ? 'entrada' : modal === 'retirar' ? 'saida' : 'rendimento'}
+            caixinha={selecionada}
+            onSalvar={handleMovimento}
+            onCancelar={fecharModal}
+          />
         </Modal>
       )}
 

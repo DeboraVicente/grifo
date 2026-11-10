@@ -6,6 +6,7 @@ import ReceitaForm from '../components/relatorios/ReceitaForm'
 import TabelaReceitas from '../components/receitas/TabelaReceitas'
 import ReceitaCard from '../components/receitas/ReceitaCard'
 import Modal from '../components/ui/Modal'
+import { useEhMobile } from '../components/ui/ListaMobile'
 import { filtrarReceitas, fmtBRL, linhasDoMes, resumoReceitas, type FiltroReceita } from '../lib/receitas'
 import type { Receita, InfoFamilia } from '../types'
 import type { ReceitaForm as ReceitaFormType } from '../hooks/useReceitas'
@@ -39,6 +40,9 @@ export default function ReceitasPage({ familiaId, meuUid, temFamilia = false, fa
   const [ano, setAno] = useState(hoje.getFullYear())
   const [aba, setAba] = useState<FiltroReceita>('todas')
   const [visualizacao, setVisualizacao] = useState<'cards' | 'tabela'>('tabela')
+  // No celular só existe a lista nova (que já traz os totais)
+  const ehMobile = useEhMobile()
+  const modoVisual = ehMobile ? 'tabela' : visualizacao
   const [modal, setModal] = useState<{ item?: Receita } | null>(null)
 
   const navegar = (dir: -1 | 1) => {
@@ -70,6 +74,7 @@ export default function ReceitasPage({ familiaId, meuUid, temFamilia = false, fa
           <span className="nav-label">{MESES_PT[mes]} {ano}</span>
           <button className="nav-btn" onClick={() => navegar(1)} aria-label="Próximo mês"><ChevronRight size={16} /></button>
         </div>
+        {!ehMobile && (
         <div className="toggle-view">
           <button className={`toggle-btn ${visualizacao === 'cards' ? 'ativo' : ''}`} onClick={() => setVisualizacao('cards')} title="Cards">
             <LayoutGrid size={16} />
@@ -78,6 +83,7 @@ export default function ReceitasPage({ familiaId, meuUid, temFamilia = false, fa
             <TableProperties size={16} />
           </button>
         </div>
+        )}
       </div>
 
       {/* Linha 2: abas + nova */}
@@ -91,6 +97,7 @@ export default function ReceitasPage({ familiaId, meuUid, temFamilia = false, fa
       </div>
 
       {/* Resumo do mês */}
+      {!ehMobile && (
       <div className="rp-resumo">
         <div className="rp-metrica destaque">
           <span>Recebido no mês</span>
@@ -105,13 +112,14 @@ export default function ReceitasPage({ familiaId, meuUid, temFamilia = false, fa
           <strong>{fmtBRL(resumo.avulso)}</strong>
         </div>
       </div>
+      )}
 
       {loading ? null : linhas.length === 0 ? (
         <div className="rp-vazio">
           <p>{linhasMes.length === 0 ? `Nenhuma receita em ${MESES_PT[mes].toLowerCase()}.` : 'Nenhuma receita nesta aba.'}</p>
           <button className="btn-criar-vazio" onClick={() => setModal({})}>Adicionar receita</button>
         </div>
-      ) : visualizacao === 'tabela' ? (
+      ) : modoVisual === 'tabela' ? (
         <TabelaReceitas linhas={linhas} onEditar={(r) => setModal({ item: r })} onRemover={handleRemover} />
       ) : (
         <div className="rp-cards">

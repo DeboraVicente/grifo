@@ -64,7 +64,7 @@ export default function DespesaForm({ inicial, cartoes, contas, emFamilia, famil
       escopo: (inicial.escopo as Escopo) ?? 'familiar',
       // Despesas antigas sem "pago por" contam como pagas pela dona da família
       pagoPor: inicial.pagoPor ?? familia?.ownerUid,
-    } : { ...FORM_VAZIO, pagoPor: meuUid }
+    } : { ...FORM_VAZIO, pagoPor: meuUid, escopo: emFamilia ? 'pessoal' : 'familiar' }
   )
   const [loading, setLoading] = useState(false)
   const [recorrenteAtivo, setRecorrenteAtivo] = useState(inicial?.recorrente ?? false)

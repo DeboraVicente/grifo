@@ -1,6 +1,7 @@
 import { Check, Pencil, PiggyBank, Trash2 } from 'lucide-react'
 import type { GastoPrevisto } from '../../types'
 import CategoryIcon from '../ui/CategoryIcon'
+import ListaMobile, { ResumoMobile, useEhMobile } from '../ui/ListaMobile'
 import { descreverIntervalo, descreverPrazo, fmtBRL, resumir } from '../../lib/previstos'
 
 interface Props {
@@ -18,6 +19,7 @@ const fmtData = (iso: string) =>
 
 /** Gastos previstos em tabela (mesmo visual das tabelas de despesas e receitas). */
 export default function TabelaPrevistos({ previstos, onReservar, onConcluir, onEditar, onRemover }: Props) {
+  const ehMobile = useEhMobile()
   const totais = previstos.reduce((acc, g) => {
     const r = resumir(g)
     acc.estimado += g.valorEstimado
@@ -25,6 +27,69 @@ export default function TabelaPrevistos({ previstos, onReservar, onConcluir, onE
     acc.pendenteMes += r.pendenteNoMes
     return acc
   }, { estimado: 0, reservado: 0, pendenteMes: 0 })
+
+  if (ehMobile) {
+    return (
+      <div className="tp-mobile">
+        {previstos.length > 0 && (
+          <ResumoMobile itens={[
+            { label: 'Estimado', valor: fmtBRL(totais.estimado) },
+            { label: 'Reservado', valor: fmtBRL(totais.reservado) },
+            { label: 'No mês', valor: fmtBRL(totais.pendenteMes), cor: '#C8A45A', destaque: true },
+          ]} />
+        )}
+        <ListaMobile
+          vazio="Nenhum previsto."
+          grupos={[{
+            itens: previstos.map((g) => {
+              const r = resumir(g)
+              return {
+                id: g.id,
+                icone: <CategoryIcon categoria={g.categoria} size={18} color="#636e72" />,
+                titulo: g.nome,
+                detalhes: [fmtData(g.proximaData), descreverPrazo(r.dias)],
+                valor: fmtBRL(g.valorEstimado),
+                status: <span className={`tp-status ${r.status}`}>{STATUS_LABEL[r.status]}</span>,
+                extra: (
+                  <span className="tp-m-prog">
+                    <span className="tp-barra"><span style={{ width: `${r.progresso}%` }} /></span>
+                    <span className="tp-sub">{fmtBRL(g.valorReservado)} reservado · {Math.round(r.progresso)}%</span>
+                  </span>
+                ),
+                acaoRapida: r.pendenteNoMes >= 0.01
+                  ? { label: 'Reservar', icone: <PiggyBank size={14} />, onClick: () => onReservar(g) }
+                  : undefined,
+                ficha: [
+                  { label: 'Frequência', valor: descreverIntervalo(g.intervaloMeses) },
+                  { label: 'Próxima', valor: `${fmtData(g.proximaData)} · ${descreverPrazo(r.dias)}` },
+                  { label: 'Valor estimado', valor: fmtBRL(g.valorEstimado) },
+                  { label: 'Reservado', valor: `${fmtBRL(g.valorReservado)} (${Math.round(r.progresso)}%)` },
+                  { label: 'Reservar no mês', valor: r.pendenteNoMes >= 0.01 ? fmtBRL(r.pendenteNoMes) : '—' },
+                ],
+                acoes: [
+                  { label: 'Reservar', icone: <PiggyBank size={16} />, tom: 'primaria', onClick: () => onReservar(g) },
+                  { label: 'Concluir', icone: <Check size={16} />, tom: 'neutra', onClick: () => onConcluir(g) },
+                  { label: 'Editar', icone: <Pencil size={16} />, tom: 'neutra', onClick: () => onEditar(g) },
+                  { label: 'Excluir', icone: <Trash2 size={16} />, tom: 'perigo', onClick: () => onRemover(g) },
+                ],
+              }
+            }),
+          }]}
+        />
+        <style>{`
+          .tp-mobile { display: flex; flex-direction: column; gap: 0.85rem; }
+          .tp-m-prog { display: flex; flex-direction: column; gap: 3px; }
+          .tp-mobile .tp-barra { display: block; height: 5px; background: #ECEFF1; border-radius: 3px; overflow: hidden; }
+          .tp-mobile .tp-barra > span { display: block; height: 100%; background: #C8A45A; border-radius: 3px; }
+          .tp-mobile .tp-sub { font-size: 0.72rem; color: #95A5A6; }
+          .tp-status { display: inline-block; font-size: 0.66rem; font-weight: 700; border-radius: 6px; padding: 0.15rem 0.45rem; white-space: nowrap; }
+          .tp-status.em-dia { background: rgba(39,174,96,0.1); color: #1E8449; }
+          .tp-status.chegando { background: rgba(230,126,34,0.12); color: #B9690F; }
+          .tp-status.atrasado { background: rgba(231,76,60,0.1); color: #C0392B; }
+        `}</style>
+      </div>
+    )
+  }
 
   return (
     <div className="tp-wrap">

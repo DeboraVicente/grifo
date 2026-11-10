@@ -77,5 +77,18 @@ export function useCaixinhas(familiaId: string | undefined, meuUid?: string) {
     })
   }
 
-  return { caixinhas, loading, criar, editar, remover, adicionarMovimento }
+  /** Desfaz um movimento lançado errado: tira do histórico e corrige o saldo. */
+  const removerMovimento = async (id: string, movimentoId: string) => {
+    const caixinha = caixinhas.find((c) => c.id === id)
+    const mov = caixinha?.historico.find((m) => m.id === movimentoId)
+    if (!caixinha || !mov) return
+    const delta = mov.tipo === 'saida' ? mov.valor : -mov.valor
+    await updateDoc(doc(db, 'caixinhas', id), {
+      valorAtual: Math.max(0, caixinha.valorAtual + delta),
+      historico: caixinha.historico.filter((m) => m.id !== movimentoId),
+      atualizadoEm: serverTimestamp(),
+    })
+  }
+
+  return { caixinhas, loading, criar, editar, remover, adicionarMovimento, removerMovimento }
 }

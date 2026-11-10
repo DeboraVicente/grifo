@@ -2,6 +2,7 @@ import { Pencil, Trash2, Repeat } from 'lucide-react'
 import type { Receita } from '../../types'
 import { CATEGORIA_RECEITA_LABEL, fmtBRL, fmtDiaMes, resumoReceitas, type LinhaReceita } from '../../lib/receitas'
 import IconeReceita from './IconeReceita'
+import ListaMobile, { ResumoMobile, useEhMobile, rotuloDia, agruparPorDia } from '../ui/ListaMobile'
 
 interface Props {
   linhas: LinhaReceita[]
@@ -12,6 +13,48 @@ interface Props {
 /** Receitas do mês em tabela (mesmo visual da tabela de despesas). */
 export default function TabelaReceitas({ linhas, onEditar, onRemover }: Props) {
   const resumo = resumoReceitas(linhas)
+  const ehMobile = useEhMobile()
+
+  if (ehMobile) {
+    const ordenadas = [...linhas].sort((a, b) => a.dataNoMes.localeCompare(b.dataNoMes))
+    return (
+      <div className="tr-mobile">
+        {linhas.length > 0 && (
+          <ResumoMobile itens={[
+            { label: 'Recorrente', valor: fmtBRL(resumo.recorrente) },
+            { label: 'Avulso', valor: fmtBRL(resumo.avulso) },
+            { label: 'Total', valor: fmtBRL(resumo.total), cor: '#27AE60', destaque: true },
+          ]} />
+        )}
+        <ListaMobile
+          vazio="Nenhuma receita neste mês."
+          grupos={agruparPorDia(ordenadas, l => l.dataNoMes).map(([dia, ls]) => ({
+            titulo: rotuloDia(dia),
+            resumo: ls.length > 1 ? fmtBRL(ls.reduce((s, l) => s + l.receita.valor, 0)) : undefined,
+            itens: ls.map(({ receita: r, dataNoMes }) => ({
+              id: r.id,
+              icone: <IconeReceita categoria={r.categoria} size={18} />,
+              iconeFundo: 'rgba(39,174,96,0.08)',
+              titulo: r.nome,
+              detalhes: [CATEGORIA_RECEITA_LABEL[r.categoria] ?? r.categoria, r.recorrente ? 'Recorrente' : 'Avulsa'],
+              valor: fmtBRL(r.valor),
+              valorClasse: 'positivo',
+              ficha: [
+                { label: 'Data', valor: fmtDiaMes(dataNoMes) },
+                { label: 'Categoria', valor: CATEGORIA_RECEITA_LABEL[r.categoria] ?? r.categoria },
+                { label: 'Tipo', valor: r.recorrente ? 'Recorrente' : 'Avulsa' },
+              ],
+              acoes: [
+                { label: 'Editar', icone: <Pencil size={16} />, tom: 'neutra', onClick: () => onEditar(r) },
+                { label: 'Excluir', icone: <Trash2 size={16} />, tom: 'perigo', onClick: () => onRemover(r) },
+              ],
+            })),
+          }))}
+        />
+        <style>{`.tr-mobile { display: flex; flex-direction: column; gap: 0.85rem; }`}</style>
+      </div>
+    )
+  }
 
   return (
     <div className="tr-wrap">
