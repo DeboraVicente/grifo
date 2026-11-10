@@ -7,8 +7,7 @@ import {
   onAuthStateChanged,
   updateProfile,
 } from 'firebase/auth'
-import { doc, setDoc } from 'firebase/firestore'
-import { auth, db } from '../lib/firebase'
+import { auth } from '../lib/firebase'
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
@@ -38,12 +37,6 @@ export function useAuth() {
     try {
       const { user } = await createUserWithEmailAndPassword(auth, email, password)
       await updateProfile(user, { displayName: nome })
-      // Salva perfil no Firestore para busca por e-mail nas amizades
-      await setDoc(doc(db, 'usuarios', user.uid), {
-        nome,
-        email: email.toLowerCase(),
-        criadoEm: new Date().toISOString(),
-      })
     } catch (e: any) {
       setError(mapFirebaseError(e.code))
       throw e
@@ -60,7 +53,9 @@ function mapFirebaseError(code: string): string {
     'auth/user-not-found': 'Usuário não encontrado.',
     'auth/wrong-password': 'Senha incorreta.',
     'auth/email-already-in-use': 'Este e-mail já está em uso.',
-    'auth/weak-password': 'A senha deve ter pelo menos 6 caracteres.',
+    'auth/weak-password': 'Senha fraca. Use pelo menos 8 caracteres.',
+    'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos e tente de novo.',
+    'auth/password-does-not-meet-requirements': 'A senha não atende aos requisitos de segurança.',
     'auth/invalid-email': 'E-mail inválido.',
     'auth/invalid-credential': 'E-mail ou senha incorretos.',
   }

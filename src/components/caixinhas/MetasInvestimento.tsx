@@ -1,6 +1,7 @@
 import { ArrowUp } from 'lucide-react'
 import type { Caixinha } from '../../types'
 import CategoryIcon from '../ui/CategoryIcon'
+import ListaMobile, { ResumoMobile, useEhMobile } from '../ui/ListaMobile'
 
 interface Props {
   caixinhas: Caixinha[]
@@ -27,6 +28,59 @@ const hoje = new Date()
 export default function MetasInvestimento({ caixinhas, ano, mes, onDepositar }: Props) {
   const ehMesAtual = ano === hoje.getFullYear() && mes === hoje.getMonth() + 1
   const caixinhasComMeta = caixinhas.filter((c) => c.metaMensal)
+  const ehMobile = useEhMobile()
+
+  if (ehMobile) {
+    const totalMeta = caixinhasComMeta.reduce((s, c) => s + (c.metaMensal ?? 0), 0)
+    const totalInvestido = caixinhasComMeta.reduce((s, c) => s + investidoNomes(c, ano, mes), 0)
+    return (
+      <div className="metas-mobile">
+        {caixinhasComMeta.length > 0 && (
+          <ResumoMobile itens={[
+            { label: 'Meta do mês', valor: fmt(totalMeta) },
+            { label: 'Aportado', valor: fmt(totalInvestido), cor: '#27AE60' },
+            { label: 'Falta', valor: fmt(Math.max(totalMeta - totalInvestido, 0)), destaque: true },
+          ]} />
+        )}
+        <ListaMobile
+          vazio={<>Nenhuma caixinha com aporte mensal definido.<br />Edite uma caixinha e ative "Definir aporte mensal".</>}
+          grupos={[{
+            itens: caixinhasComMeta.map((c) => {
+              const investido = investidoNomes(c, ano, mes)
+              const aportou = investido > 0
+              const progresso = c.valorMeta ? Math.min((c.valorAtual / c.valorMeta) * 100, 100) : null
+              return {
+                id: c.id,
+                icone: <CategoryIcon categoria={c.categoria} size={18} color="#636e72" />,
+                titulo: c.nome,
+                detalhes: [`${fmt(investido)} de ${fmt(c.metaMensal!)} no mês`],
+                status: <span className={`badge-status ${aportou ? 'aportou' : 'nao-aportou'}`}>{aportou ? 'Aportou' : 'Não aportou'}</span>,
+                extra: progresso !== null ? (
+                  <span className="metas-m-prog">
+                    <span className="prog-bar"><span className="prog-fill" style={{ width: `${progresso}%` }} /></span>
+                    <span className="prog-label">{fmt(c.valorAtual)} / {fmt(c.valorMeta!)}</span>
+                  </span>
+                ) : undefined,
+                acaoRapida: ehMesAtual
+                  ? { label: 'Aportar', icone: <ArrowUp size={14} />, onClick: () => onDepositar(c) }
+                  : undefined,
+              }
+            }),
+          }]}
+        />
+        <style>{`
+          .metas-mobile { display: flex; flex-direction: column; gap: 0.85rem; }
+          .metas-m-prog { display: flex; flex-direction: column; gap: 3px; }
+          .metas-mobile .prog-bar { display: block; height: 5px; background: #F1F2F6; border-radius: 3px; overflow: hidden; }
+          .metas-mobile .prog-fill { display: block; height: 100%; background: linear-gradient(90deg, #C8A45A, #D4AF37); border-radius: 3px; }
+          .metas-mobile .prog-label { font-size: 0.72rem; color: #95A5A6; font-variant-numeric: tabular-nums; }
+          .badge-status { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.66rem; font-weight: 700; white-space: nowrap; }
+          .badge-status.aportou { background: #E8F5E9; color: #27AE60; }
+          .badge-status.nao-aportou { background: #FFF5F5; color: #E74C3C; }
+        `}</style>
+      </div>
+    )
+  }
 
   return (
     <div className="metas-wrapper">

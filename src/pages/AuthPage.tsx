@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAuthContext } from '../lib/AuthContext'
 
 export default function AuthPage() {
@@ -6,6 +7,7 @@ export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'cadastro'>('login')
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({ nome: '', email: '', senha: '' })
+  const [mostrarSenha, setMostrarSenha] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -20,6 +22,7 @@ export default function AuthPage() {
     setMode((m) => (m === 'login' ? 'cadastro' : 'login'))
     setError(null)
     setForm({ nome: '', email: '', senha: '' })
+    setMostrarSenha(false)
   }
 
   return (
@@ -41,13 +44,21 @@ export default function AuthPage() {
           )}
           <div className="field">
             <label>E-mail</label>
-            <input type="email" placeholder="seu@email.com" value={form.email}
+            <input type="email" placeholder="seu@email.com" value={form.email} autoComplete="email"
               onChange={(e) => setForm({ ...form, email: e.target.value })} required />
           </div>
           <div className="field">
             <label>Senha</label>
-            <input type="password" placeholder="••••••••" value={form.senha}
-              onChange={(e) => setForm({ ...form, senha: e.target.value })} required minLength={6} />
+            <div className="senha-wrap">
+              <input type={mostrarSenha ? 'text' : 'password'} placeholder="••••••••" value={form.senha}
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                onChange={(e) => setForm({ ...form, senha: e.target.value })} required minLength={mode === 'cadastro' ? 8 : 6} />
+              <button type="button" className="btn-ver-senha" onClick={() => setMostrarSenha((v) => !v)}
+                aria-label={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'} aria-pressed={mostrarSenha}>
+                {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            {mode === 'cadastro' && <span className="senha-dica">Mínimo de 8 caracteres.</span>}
           </div>
           {error && <p className="auth-error">{error}</p>}
           <button type="submit" className="btn-primary" disabled={loading}>
@@ -140,6 +151,17 @@ export default function AuthPage() {
           transition: all 0.2s ease;
           outline: none;
         }
+
+        .senha-wrap { position: relative; display: flex; }
+        .senha-wrap input { flex: 1; min-width: 0; padding-right: 3rem; }
+        .btn-ver-senha {
+          position: absolute; right: 0.35rem; top: 50%; transform: translateY(-50%);
+          width: 40px; height: 40px; border: none; background: none; border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          color: #95A5A6; cursor: pointer;
+        }
+        .btn-ver-senha:hover { color: #C8A45A; }
+        .senha-dica { color: #95A5A6; font-size: 0.75rem; padding-left: 4px; }
 
         .field input:focus {
           border-color: #C8A45A;

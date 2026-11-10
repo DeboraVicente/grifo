@@ -5,7 +5,7 @@ import { useAuthContext } from '../lib/AuthContext'
 import CaixinhaCard from '../components/caixinhas/CaixinhaCard'
 import CaixinhaForm from '../components/caixinhas/CaixinhaForm'
 import MetasInvestimento from '../components/caixinhas/MetasInvestimento'
-import PagamentoForm from '../components/despesas/PagamentoForm'
+import MovimentoForm from '../components/caixinhas/MovimentoForm'
 import Modal from '../components/ui/Modal'
 import type { Caixinha, CaixinhaForm as CaixinhaFormType } from '../types'
 
@@ -15,9 +15,9 @@ type Visualizacao = 'cards' | 'metas'
 const MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
-export default function CaixinhasPage() {
+export default function CaixinhasPage({ familiaId, meuUid, temFamilia = false }: { familiaId?: string; meuUid?: string; temFamilia?: boolean }) {
   const { user } = useAuthContext()
-  const { caixinhas, loading, criar, editar, remover, adicionarMovimento } = useCaixinhas(user?.uid)
+  const { caixinhas, loading, criar, editar, remover, adicionarMovimento, removerMovimento } = useCaixinhas(familiaId ?? user?.uid, meuUid ?? user?.uid)
 
   const hoje = new Date()
   const [modal, setModal] = useState<ModalTipo>(null)
@@ -113,6 +113,7 @@ export default function CaixinhasPage() {
               onDepositar={() => { setSelecionada(c); setModal('depositar') }}
               onRetirar={() => { setSelecionada(c); setModal('retirar') }}
               onRendimento={() => { setSelecionada(c); setModal('rendimento') }}
+              onRemoverMovimento={(m) => removerMovimento(c.id, m.id)}
             />
           ))}
         </div>
@@ -120,101 +121,34 @@ export default function CaixinhasPage() {
 
       {modal === 'criar' && (
         <Modal titulo="Nova caixinha" onFechar={fecharModal}>
-          <CaixinhaForm onSalvar={handleCriar} onCancelar={fecharModal} />
+          <CaixinhaForm onSalvar={handleCriar} onCancelar={fecharModal} emFamilia={temFamilia} />
         </Modal>
       )}
       {modal === 'editar' && selecionada && (
         <Modal titulo="Editar caixinha" onFechar={fecharModal}>
-          <CaixinhaForm inicial={selecionada} onSalvar={handleEditar} onCancelar={fecharModal} />
+          <CaixinhaForm inicial={selecionada} onSalvar={handleEditar} onCancelar={fecharModal} emFamilia={temFamilia} />
         </Modal>
       )}
-      {modal === 'depositar' && selecionada && (
-        <Modal titulo={`Depositar em "${selecionada.nome}"`} onFechar={fecharModal}>
-          <PagamentoForm tipo="pagamento" valorRestante={selecionada.valorMeta ? selecionada.valorMeta - selecionada.valorAtual : 0}
-            onSalvar={handleMovimento} onCancelar={fecharModal} />
-        </Modal>
-      )}
-      {modal === 'retirar' && selecionada && (
-        <Modal titulo={`Retirar de "${selecionada.nome}"`} onFechar={fecharModal}>
-          <PagamentoForm tipo="adiantamento" valorRestante={selecionada.valorAtual}
-            max={selecionada.valorAtual}
-            onSalvar={handleMovimento} onCancelar={fecharModal} />
-        </Modal>
-      )}
-      {modal === 'rendimento' && selecionada && (
-        <Modal titulo={`Rendimento em "${selecionada.nome}"`} onFechar={fecharModal}>
-          <PagamentoForm tipo="adiantamento" valorRestante={0}
-            onSalvar={handleMovimento} onCancelar={fecharModal} />
+      {(modal === 'depositar' || modal === 'retirar' || modal === 'rendimento') && selecionada && (
+        <Modal
+          titulo={modal === 'depositar' ? `Depositar em "${selecionada.nome}"` : modal === 'retirar' ? `Retirar de "${selecionada.nome}"` : `Rendimento em "${selecionada.nome}"`}
+          onFechar={fecharModal}
+        >
+          <MovimentoForm
+            tipo={modal === 'depositar' ? 'entrada' : modal === 'retirar' ? 'saida' : 'rendimento'}
+            caixinha={selecionada}
+            onSalvar={handleMovimento}
+            onCancelar={fecharModal}
+          />
         </Modal>
       )}
 
       <style>{`
         .caixinhas-page { display: flex; flex-direction: column; gap: 1rem; }
 
-        /* Linha 1 */
-        .ph-row1 { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
-        .page-titulo { font-size: 1.4rem; font-weight: 900; color: #2D3436; flex: 1; }
-
-        .mes-nav {
-          display: flex; align-items: center; gap: 0.5rem;
-          background: #FFFFFF; border: 1px solid #F1F2F6;
-          border-radius: 12px; padding: 0.35rem 0.75rem;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
-        .nav-btn {
-          display: flex; align-items: center; justify-content: center;
-          width: 28px; height: 28px; border-radius: 8px;
-          border: none; background: #F8F9FA;
-          color: #C8A45A; cursor: pointer; font-size: 1.1rem;
-          transition: background 0.15s;
-        }
-        .nav-btn:hover:not(:disabled) { background: #F1F2F6; }
-        .nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .nav-label { font-size: 0.85rem; font-weight: 600; color: #2D3436; min-width: 110px; text-align: center; }
-
-        .toggle-view {
-          display: flex; align-items: center;
-          background: #F8F9FA; border: 1px solid #F1F2F6;
-          border-radius: 10px; padding: 3px; gap: 2px;
-        }
-        .toggle-btn {
-          display: flex; align-items: center; justify-content: center;
-          width: 30px; height: 30px; border-radius: 7px;
-          border: none; background: transparent; color: #95A5A6;
-          cursor: pointer; transition: all 0.15s;
-        }
-        .toggle-btn:hover { color: #636E72; }
-        .toggle-btn.ativo { background: #FFFFFF; color: #2D3436; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-
         /* Linha 2 */
-        .ph-row2 { display: flex; justify-content: flex-end; }
-
-        .btn-criar {
-          background: #C8A45A; color: #FFFFFF; border: none; border-radius: 12px;
-          padding: 0.6rem 1.1rem; font-size: 0.85rem; font-weight: 700; cursor: pointer;
-          box-shadow: 0 4px 12px rgba(200,164,90,0.25); transition: all 0.2s ease;
-          white-space: nowrap; font-family: inherit;
-        }
-        .btn-criar:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(200,164,90,0.35); }
-
+        .ph-row2 { justify-content: flex-end; }
         .caixinhas-list { display: flex; flex-direction: column; gap: 1rem; }
-
-        .estado-vazio {
-          display: flex; flex-direction: column; align-items: center;
-          gap: 1rem; padding: 4rem 1rem; color: #BDC3C7; text-align: center;
-        }
-
-        .btn-criar-vazio {
-          background: #FFFFFF; border: 1px dashed #D1D8E0; color: #95A5A6;
-          border-radius: 12px; padding: 0.8rem 1.5rem; font-size: 0.85rem; font-weight: 600;
-          cursor: pointer; transition: all 0.2s; font-family: inherit;
-        }
-        .btn-criar-vazio:hover { border-color: #C8A45A; color: #C8A45A; background: #FFFDF7; }
-
-        @media (max-width: 600px) {
-          .ph-row1 { gap: 0.5rem; }
-          .nav-label { min-width: 100px; font-size: 0.82rem; }
-        }
       `}</style>
     </div>
   )

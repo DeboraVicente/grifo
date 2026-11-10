@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pencil, Trash2, ArrowUp, ArrowDown, CheckCircle2, TrendingUp, Sparkles } from 'lucide-react'
-import type { Caixinha } from '../../types'
+import type { Caixinha, MovimentoCaixinha } from '../../types'
 import CategoryIcon from '../ui/CategoryIcon'
 
 interface Props {
@@ -10,11 +10,12 @@ interface Props {
   onDepositar: () => void
   onRetirar: () => void
   onRendimento: () => void
+  onRemoverMovimento?: (m: MovimentoCaixinha) => void
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDepositar, onRetirar, onRendimento }: Props) {
+export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDepositar, onRetirar, onRendimento, onRemoverMovimento }: Props) {
   const [expandido, setExpandido] = useState(false)
 
   const progresso = caixinha.valorMeta
@@ -94,6 +95,15 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
                   </span>
                   {m.observacao && <span className="mov-obs">{m.observacao}</span>}
                   <span className={`mov-valor ${m.tipo}`}>{m.tipo === 'saida' ? '-' : '+'}{fmt(m.valor)}</span>
+                  {onRemoverMovimento && (
+                    <button type="button" className="mov-remover" aria-label={`Excluir movimento de ${fmt(m.valor)}`} title="Excluir movimento"
+                      onClick={() => {
+                        const tipo = m.tipo === 'entrada' ? 'depósito' : m.tipo === 'saida' ? 'retirada' : 'rendimento'
+                        if (confirm(`Excluir o ${tipo} de ${fmt(m.valor)}? O saldo da caixinha será corrigido.`)) onRemoverMovimento(m)
+                      }}>
+                      <Trash2 size={13} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -271,6 +281,8 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
       .mov-valor.entrada { color: #2ECC71; }
       .mov-valor.saida { color: #E74C3C; }
       .mov-valor.rendimento { color: #C8A45A; }
+      .mov-remover { background: none; border: none; color: #BDC3C7; cursor: pointer; padding: 6px; margin: -6px -4px -6px 0; border-radius: 6px; display: flex; }
+      .mov-remover:hover { color: #E74C3C; background: #FFF5F5; }
 
       .card-acoes { display: flex; gap: 0.5rem; }
 

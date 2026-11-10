@@ -7,15 +7,32 @@ function mesLabel(mes: number, ano: number): string {
   return new Date(ano, mes, 1).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
 }
 
-function receitasDoMes(receitas: Receita[], mes: number, ano: number): Receita[] {
+/**
+ * Receitas que entram no mês: avulsas pela data; recorrentes a partir do mês em que
+ * começaram (não contam em meses anteriores ao início).
+ */
+export function receitasDoMes(receitas: Receita[], mes: number, ano: number): Receita[] {
+  const alvo = ano * 12 + mes
   return receitas.filter((r) => {
-    if (r.recorrente) return true
     const d = new Date(r.data + 'T12:00:00')
-    return d.getMonth() === mes && d.getFullYear() === ano
+    const inicio = d.getFullYear() * 12 + d.getMonth()
+    if (r.recorrente) return alvo >= inicio
+    return alvo === inicio
   })
 }
 
-function parcelasMes(despesa: Despesa, mes: number, ano: number) {
+/**
+ * Valor de uma parcela que conta nos relatórios: se a despesa tem "parte desta compra
+ * não é minha", vale só a minha parte proporcional por parcela; senão, o valor da parcela.
+ */
+export function valorDaParcela(d: Despesa, p: { valor: number }): number {
+  // Arredonda por parcela, igual à tabela da página de Despesas (para os totais baterem)
+  return d.minhaParte !== undefined && d.minhaParte !== null
+    ? parseFloat((d.minhaParte / (d.parcelas || 1)).toFixed(2))
+    : p.valor
+}
+
+export function parcelasMes(despesa: Despesa, mes: number, ano: number) {
   return despesa.listaParcelas.filter((p) => {
     const dv = new Date(p.dataVencimento + 'T12:00:00')
     return dv.getMonth() === mes && dv.getFullYear() === ano
@@ -48,7 +65,7 @@ export function calcFluxoCaixaMensal(
   const totalReceitas = receitasMes.reduce((s, r) => s + r.valor, 0)
 
   const totalDespesas = despesas.reduce((s, d) => {
-    return s + parcelasMes(d, mes, ano).reduce((ps, p) => ps + p.valor, 0)
+    return s + parcelasMes(d, mes, ano).reduce((ps, p) => ps + valorDaParcela(d, p), 0)
   }, 0)
 
   const mapaTimeline: Record<string, TimelineDia> = {}
@@ -66,7 +83,7 @@ export function calcFluxoCaixaMensal(
   })
 
   despesas.forEach((d) => {
-    parcelasMes(d, mes, ano).forEach((p) => addTimeline(p.dataVencimento, 0, p.valor))
+    parcelasMes(d, mes, ano).forEach((p) => addTimeline(p.dataVencimento, 0, valorDaParcela(d, p)))
   })
 
   const timeline = Object.values(mapaTimeline).sort((a, b) => a.data.localeCompare(b.data))
@@ -97,12 +114,12 @@ export function calcRelatorioPorCategoria(
 
   despesas.forEach((d) => {
     if (d.listaParcelas.length === 0) {
-      if (filtraData(d.data)) totais[d.categoria] = (totais[d.categoria] ?? 0) + d.valorTotal
+      if (filtraData(d.data)) totais[d.categoria] = (totais[d.categoria] ?? 0) + (d.minhaParte ?? d.valorTotal)
       return
     }
     d.listaParcelas.forEach((p) => {
       if (filtraData(p.dataVencimento))
-        totais[d.categoria] = (totais[d.categoria] ?? 0) + p.valor
+        totais[d.categoria] = (totais[d.categoria] ?? 0) + valorDaParcela(d, p)
     })
   })
 
@@ -135,13 +152,14 @@ export interface ParcelamentoDado {
 
 export function calcControleParcelamentos(despesas: Despesa[]): ParcelamentoDado[] {
   return despesas
-    .filter((d) => d.parcelas > 1 && !d.pago)
+    // Previstos projetados não são parcelamentos
+    .filter((d) => d.parcelas > 1 && !d.pago && !d.origemPrevisto)
     .map((d) => {
       const naopagas = d.listaParcelas?.filter((p) => !p.pago) || []
       const ordenadas = [...naopagas].sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento))
       const valorExibicao = d.tipo === 'financiamento'
         ? (d.valorParcela || (ordenadas[0]?.valor ?? 0))
-        : naopagas.reduce((s, p) => s + p.valor, 0)
+        : naopagas.reduce((s, p) => s + valorDaParcela(d, p), 0)
       return {
         id: d.id,
         nome: d.nome,
@@ -183,7 +201,7 @@ export function calcForecastGastos(
     const ano = hoje.getFullYear() + Math.floor((hoje.getMonth() + i) / 12)
 
     const gastos = despesas.reduce((s, d) => {
-      return s + parcelasMes(d, mes, ano).reduce((ps, p) => ps + p.valor, 0)
+      return s + parcelasMes(d, mes, ano).reduce((ps, p) => ps + valorDaParcela(d, p), 0)
     }, 0)
 
     const receitasMes = receitasDoMes(receitas, mes, ano).reduce((s, r) => s + r.valor, 0)
@@ -219,8 +237,8 @@ export function calcQuantoPossoGastar(
 
   despesas.forEach((d) => {
     parcelasMes(d, mes, ano).forEach((p) => {
-      if (p.pago) despesasRealizadas += p.valor
-      else despesasFuturas += p.valor
+      if (p.pago) despesasRealizadas += valorDaParcela(d, p)
+      else despesasFuturas += valorDaParcela(d, p)
     })
   })
 
@@ -270,7 +288,7 @@ export function calcEvolucaoFinanceira(
 
     const totalReceitas = receitasDoMes(receitas, mes, ano).reduce((s, r) => s + r.valor, 0)
     const totalDespesas = despesas.reduce((s, d) => {
-      return s + parcelasMes(d, mes, ano).reduce((ps, p) => ps + p.valor, 0)
+      return s + parcelasMes(d, mes, ano).reduce((ps, p) => ps + valorDaParcela(d, p), 0)
     }, 0)
 
     resultado.push({ mes, ano, label: mesLabel(mes, ano), receitas: totalReceitas, despesas: totalDespesas, saldo: totalReceitas - totalDespesas })

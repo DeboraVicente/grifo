@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { LayoutGrid, TableProperties, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useDespesas } from '../hooks/useDespesas'
 import { useCartoes } from '../hooks/useCartoes'
@@ -6,10 +6,12 @@ import { useContas } from '../hooks/useContas'
 import { useAuthContext } from '../lib/AuthContext'
 import DespesaCard from '../components/despesas/DespesaCard'
 import DespesaForm from '../components/despesas/DespesaForm'
+import SelectEscopo from '../components/familia/SelectEscopo'
+import { filtrarPorVisao, type VisaoEscopo } from '../lib/escopo'
 import TabelaDespesas, { type TabTipo } from '../components/despesas/TabelaDespesas'
 import PagamentoForm from '../components/despesas/PagamentoForm'
 import Modal from '../components/ui/Modal'
-import type { Despesa, DespesaForm as DespesaFormType } from '../types'
+import type { Despesa, DespesaForm as DespesaFormType, InfoFamilia } from '../types'
 
 type ModalTipo = 'criar' | 'editar' | 'pagar' | 'adiantar' | null
 type FiltroTipo = 'pendentes' | 'parcialmente-pagas' | 'pagas' | 'todas'
@@ -26,15 +28,39 @@ function mesProximo(ano: number, mes: number) {
   return mes === 12 ? { ano: ano + 1, mes: 1 } : { ano, mes: mes + 1 }
 }
 
-export default function DespesasPage() {
+interface DespesasPageProps {
+  pedidoNovaDespesa?: number
+  familiaId?: string
+  meuUid?: string
+  temFamilia?: boolean
+  familia?: InfoFamilia
+}
+
+export default function DespesasPage({ pedidoNovaDespesa = 0, familiaId, meuUid, temFamilia = false, familia }: DespesasPageProps) {
   const { user } = useAuthContext()
-  const { despesas, loading, criar, editar, remover, pagarParcela, removerPagamento, adicionarAdiantamento } = useDespesas(user?.uid)
-  const { cartoes } = useCartoes(user?.uid)
-  const { contas } = useContas(user?.uid)
+  const uid = familiaId ?? user?.uid
+  const myUid = meuUid ?? user?.uid
+  const { despesas: todasDespesas, loading, criar, editar, remover, pagarParcela, removerPagamento, adicionarAdiantamento, proximasDaRecorrencia } = useDespesas(uid, myUid)
+  // Cartões e contas são privados: cada pessoa só vê e escolhe os seus
+  const { cartoes } = useCartoes(myUid, uid)
+  // Abas Tudo · Família · Pessoal (só aparecem quando há família ou itens pessoais)
+  const [visao, setVisao] = useState<VisaoEscopo>('tudo')
+  const mostrarVisao = temFamilia || todasDespesas.some((d) => d.escopo === 'pessoal')
+  const despesas = useMemo(
+    () => filtrarPorVisao(todasDespesas, mostrarVisao ? visao : 'tudo'),
+    [todasDespesas, visao, mostrarVisao],
+  )
+  const familiaParaEtiqueta = temFamilia ? familia : undefined
+  const { contas } = useContas(myUid, uid)
 
   const hoje = new Date()
   const [modal, setModal] = useState<ModalTipo>(null)
   const [selecionada, setSelecionada] = useState<Despesa | null>(null)
+
+  // Abre o formulário quando vem do botão "+" ou do atalho do ícone do app
+  useEffect(() => {
+    if (pedidoNovaDespesa > 0) { setSelecionada(null); setModal('criar') }
+  }, [pedidoNovaDespesa])
   const [parcelaSelecionada, setParcelaSelecionada] = useState<number>(1)
   const [filtro, setFiltro] = useState<FiltroTipo>('pendentes')
   const [filtroMetodo, setFiltroMetodo] = useState<string>('todos')
@@ -80,9 +106,10 @@ export default function DespesasPage() {
     if (!confirm(`Remover "${d.nome}"?`)) return
     await remover(d.id)
   }
-  const handlePagarParcela = async (dados: { valor: number; data: string; observacao: string }) => {
+  const handlePagarParcela = async (dados: { valor: number; data: string; observacao: string; ajustarValor?: boolean; atualizarProximas?: boolean }) => {
     if (!selecionada) return
-    await pagarParcela(selecionada.id, parcelaSelecionada, dados)
+    const { ajustarValor, atualizarProximas, ...pagamento } = dados
+    await pagarParcela(selecionada.id, parcelaSelecionada, pagamento, { ajustarValor, atualizarProximas })
     fecharModal()
   }
   const handleAdiantar = async (dados: { valor: number; data: string; observacao: string; parcelasQuitadas?: number }) => {
@@ -213,6 +240,7 @@ export default function DespesasPage() {
                 <option value="fixo">Fixo</option>
                 <option value="variavel">Variável</option>
               </select>
+              {mostrarVisao && <SelectEscopo valor={visao} onChange={(v) => { setVisao(v); setPagina(0) }} />}
               {metodosDisponiveis.length > 1 && (
                 <select
                   className={`filtro-select ${filtroMetodo !== 'todos' ? 'ativo' : ''}`}
@@ -252,6 +280,9 @@ export default function DespesasPage() {
           despesas={despesas}
           cartoes={cartoes}
           contas={contas}
+          familia={familiaParaEtiqueta}
+          escopo={visao}
+          onEscopo={mostrarVisao ? setVisao : undefined}
           ano={ano}
           mes={mes}
           tab={tab}
@@ -277,6 +308,7 @@ export default function DespesasPage() {
                   key={d.id}
                   despesa={d}
                   cartaoLabel={cartaoLabel}
+                  familia={familiaParaEtiqueta}
                   onEditar={() => { setSelecionada(d); setModal('editar') }}
                   onRemover={() => handleRemover(d)}
                   onPagarParcela={(num) => abrirPagarParcela(d, num)}
@@ -303,17 +335,20 @@ export default function DespesasPage() {
       {/* ── Modais ── */}
       {modal === 'criar' && (
         <Modal titulo="Nova despesa" onFechar={fecharModal}>
-          <DespesaForm cartoes={cartoes} contas={contas} onSalvar={handleCriar} onCancelar={fecharModal} />
+          <DespesaForm cartoes={cartoes} contas={contas} emFamilia={temFamilia} familia={familia} meuUid={myUid} onSalvar={handleCriar} onCancelar={fecharModal} />
         </Modal>
       )}
       {modal === 'editar' && selecionada && (
         <Modal titulo="Editar despesa" onFechar={fecharModal}>
-          <DespesaForm cartoes={cartoes} contas={contas} inicial={selecionada} onSalvar={handleEditar} onCancelar={fecharModal} />
+          <DespesaForm cartoes={cartoes} contas={contas} emFamilia={temFamilia} familia={familia} meuUid={myUid} inicial={selecionada} onSalvar={handleEditar} onCancelar={fecharModal} />
         </Modal>
       )}
       {modal === 'pagar' && selecionada && parcelaObj && (
         <Modal titulo={`Parcela ${parcelaSelecionada}/${selecionada.parcelas}`} onFechar={fecharModal}>
           <PagamentoForm tipo="pagamento" valorRestante={valorRestanteParcela}
+            recorrente={!!selecionada.recorrenciaId}
+            proximasEmAberto={proximasDaRecorrencia(selecionada).length}
+            jaPago={totalPagoParcela}
             onSalvar={handlePagarParcela} onCancelar={fecharModal} />
         </Modal>
       )}
@@ -332,59 +367,7 @@ export default function DespesasPage() {
       <style>{`
         .despesas-page { display: flex; flex-direction: column; gap: 1rem; }
 
-        /* Linha 1 */
-        .ph-row1 {
-          display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
-        }
-        .page-titulo { font-size: 1.4rem; font-weight: 900; color: #2D3436; flex: 1; }
-
-        .mes-nav {
-          display: flex; align-items: center; gap: 0.5rem;
-          background: #FFFFFF; border: 1px solid #F1F2F6;
-          border-radius: 12px; padding: 0.35rem 0.75rem;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
-        .nav-btn {
-          display: flex; align-items: center; justify-content: center;
-          width: 28px; height: 28px; border-radius: 8px;
-          border: none; background: #F8F9FA;
-          color: #C8A45A; cursor: pointer; font-size: 1.1rem;
-          transition: background 0.15s;
-        }
-        .nav-btn:hover:not(:disabled) { background: #F1F2F6; }
-        .nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .nav-label { font-size: 0.85rem; font-weight: 600; color: #2D3436; min-width: 110px; text-align: center; }
-
-        .toggle-view {
-          display: flex; align-items: center;
-          background: #F8F9FA; border: 1px solid #F1F2F6;
-          border-radius: 10px; padding: 3px; gap: 2px;
-        }
-        .toggle-btn {
-          display: flex; align-items: center; justify-content: center;
-          width: 30px; height: 30px; border-radius: 7px;
-          border: none; background: transparent; color: #95A5A6;
-          cursor: pointer; transition: all 0.15s;
-        }
-        .toggle-btn:hover { color: #636E72; }
-        .toggle-btn.ativo { background: #FFFFFF; color: #2D3436; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-
         /* Linha 2 */
-        .ph-row2 { display: flex; align-items: center; gap: 0.75rem; }
-
-        .tabs-nav {
-          flex: 1; display: flex; gap: 0;
-          background: #F1F2F6; padding: 0.3rem; border-radius: 12px;
-          overflow-x: auto; scrollbar-width: none;
-        }
-        .tabs-nav::-webkit-scrollbar { display: none; }
-        .tab-btn {
-          padding: 0.45rem 0.9rem; border: none; border-radius: 9px;
-          font-size: 0.78rem; font-weight: 600; cursor: pointer;
-          background: transparent; color: #7F8C8D; transition: all 0.2s;
-          font-family: inherit; white-space: nowrap;
-        }
-        .tab-btn.ativo { background: #FFFFFF; color: #C8A45A; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
 
         .filtros-cards-wrap { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
         .filtros {
@@ -413,13 +396,6 @@ export default function DespesasPage() {
         .filtro-select:hover { border-color: #C8A45A; }
         .filtro-select.ativo { border-color: #C8A45A; color: #C8A45A; background-color: #FFF8EC; }
 
-        .btn-criar {
-          background: #C8A45A; color: #FFFFFF; border: none; border-radius: 12px;
-          padding: 0.6rem 1.1rem; font-size: 0.85rem; font-weight: 600;
-          cursor: pointer; box-shadow: 0 4px 12px rgba(200,164,90,0.25);
-          white-space: nowrap; font-family: inherit; flex-shrink: 0;
-        }
-
         .despesas-list { display: flex; flex-direction: column; gap: 0.75rem; }
 
         .paginacao { display: flex; align-items: center; justify-content: center; gap: 1rem; padding: 0.5rem 0; }
@@ -429,12 +405,9 @@ export default function DespesasPage() {
         .pag-info { font-size: 0.82rem; font-weight: 700; color: #2D3436; }
         .pag-total { font-weight: 400; color: #95A5A6; }
 
-        .estado-vazio { text-align: center; padding: 4rem 1rem; color: #A4B0BE; }
-        .btn-criar-vazio { background: white; border: 1px solid #E0E0E0; color: #777; border-radius: 12px; padding: 0.8rem 1.5rem; font-size: 0.85rem; cursor: pointer; margin-top: 1rem; font-family: inherit; }
-
         @media (max-width: 600px) {
-          .ph-row1 { gap: 0.5rem; }
-          .nav-label { min-width: 110px; font-size: 0.82rem; }
+          .filtros-extra { gap: 0.3rem; }
+          .filtro-select { font-size: 0.72rem; padding: 0.3rem 1.4rem 0.3rem 0.5rem; }
         }
       `}</style>
     </div>

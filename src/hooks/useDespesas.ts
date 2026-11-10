@@ -4,7 +4,7 @@ import {
   query,
   where,
   orderBy,
-  onSnapshot,
+  
   addDoc,
   updateDoc,
   deleteDoc,
@@ -14,9 +14,9 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { assinarDonos, donosVisiveis, donoPorEscopo } from '../lib/escopo'
+import { calcularPagamento } from '../lib/pagamentos'
 import type { Despesa, DespesaForm, Pagamento, Parcela } from '../types'
-
-
 
 function avancarMes(dateStr: string, meses: number): string {
   const [ano, mes, dia] = dateStr.split('-').map(Number)
@@ -24,76 +24,63 @@ function avancarMes(dateStr: string, meses: number): string {
   return d.toISOString().split('T')[0]
 }
 
-// Gera lista de parcelas a partir do form
 function gerarParcelas(valorTotal: number, qtd: number, dataInicial: string, valorParcelaOverride?: number): Parcela[] {
   const valorParcela = valorParcelaOverride ?? parseFloat((valorTotal / qtd).toFixed(2))
   const [ano, mes, dia] = dataInicial.split('-').map(Number)
-
   return Array.from({ length: qtd }, (_, i) => {
     const d = new Date(ano, mes - 1 + i, dia)
-    const dataVencimento = d.toISOString().split('T')[0]
-    return {
-      numero: i + 1,
-      valor: valorParcela,
-      dataVencimento,
-      pago: false,
-      pagamentos: [],
-    }
+    return { numero: i + 1, valor: valorParcela, dataVencimento: d.toISOString().split('T')[0], pago: false, pagamentos: [] }
   })
 }
 
-export function useDespesas(userId: string | undefined) {
+function normalizarDespesa(d: any): Despesa {
+  const raw = d.data()
+  const valorTotal = raw.valorTotal ?? raw.valor ?? 0
+  const valorParcela = raw.valorParcela ?? valorTotal
+  const listaParcelas = (() => {
+    if (raw.listaParcelas?.length > 0) return raw.listaParcelas
+    if (valorTotal > 0 && raw.data) {
+      const qtd = raw.parcelas ?? 1
+      const parcelas = gerarParcelas(valorTotal, qtd, raw.data, raw.valorParcela)
+      if (raw.pago) return parcelas.map((p: any) => ({ ...p, pago: true }))
+      return parcelas
+    }
+    return []
+  })()
+  return {
+    id: d.id, ...raw, valorTotal, valorParcela, listaParcelas,
+    adiantamentos: raw.adiantamentos ?? [],
+    tipoGasto: raw.tipoGasto ?? (raw.recorrente ? 'fixo' : 'variavel'),
+    escopo: raw.escopo ?? 'familiar',
+    criadoEm: (raw.criadoEm as Timestamp)?.toDate().toISOString() ?? '',
+    atualizadoEm: (raw.atualizadoEm as Timestamp)?.toDate().toISOString() ?? '',
+  } as Despesa
+}
+
+const stripUndefined = (obj: Record<string, any>): Record<string, any> =>
+  Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined))
+
+export function useDespesas(familiaId: string | undefined, meuUid?: string) {
   const [despesas, setDespesas] = useState<Despesa[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!userId) { setLoading(false); return }
-
-    const q = query(
-      collection(db, 'despesas'),
-      where('userId', '==', userId),
-      orderBy('data', 'desc')
+    if (!familiaId) { setLoading(false); return }
+    return assinarDonos(
+      donosVisiveis(familiaId, meuUid),
+      (userId) => query(collection(db, 'despesas'), where('userId', '==', userId), orderBy('data', 'desc')),
+      normalizarDespesa,
+      (itens) => {
+        itens.sort((a, b) => b.data.localeCompare(a.data))
+        setDespesas(itens)
+        setLoading(false)
+      },
     )
+  }, [familiaId, meuUid])
 
-    const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map((d) => {
-        const raw = d.data()
-        // Normaliza despesas antigas que usavam "valor" em vez de "valorTotal"
-        const valorTotal = raw.valorTotal ?? raw.valor ?? 0
-        const valorParcela = raw.valorParcela ?? valorTotal
-        const listaParcelas = (() => {
-          if (raw.listaParcelas?.length > 0) return raw.listaParcelas
-          // Reconstrói para despesas antigas sem listaParcelas
-          if (valorTotal > 0 && raw.data) {
-            const qtd = raw.parcelas ?? 1
-            const parcelas = gerarParcelas(valorTotal, qtd, raw.data, raw.valorParcela)
-            // Se a despesa está paga, marca todas as parcelas como pagas
-            if (raw.pago) return parcelas.map((p: any) => ({ ...p, pago: true }))
-            return parcelas
-          }
-          return []
-        })()
-        return {
-          id: d.id,
-          ...raw,
-          valorTotal,
-          valorParcela,
-          listaParcelas,
-          adiantamentos: raw.adiantamentos ?? [],
-          tipoGasto: raw.tipoGasto ?? (raw.recorrente ? 'fixo' : 'variavel'),
-          criadoEm: (raw.criadoEm as Timestamp)?.toDate().toISOString() ?? '',
-          atualizadoEm: (raw.atualizadoEm as Timestamp)?.toDate().toISOString() ?? '',
-        }
-      }) as Despesa[]
-      setDespesas(data)
-      setLoading(false)
-    })
-
-    return unsub
-  }, [userId])
-
-  const criar = async (form: DespesaForm) => {
-    if (!userId) return
+  const criar = async (form: DespesaForm, opcoes?: { jaPago?: boolean }) => {
+    if (!familiaId) return
+    const uid = donoPorEscopo(form.escopo, familiaId, meuUid)
     const valorParcela = form.valorParcelaCustom
       ? parseFloat(form.valorParcelaCustom.toFixed(2))
       : parseFloat((form.valorTotal / form.parcelas).toFixed(2))
@@ -112,9 +99,12 @@ export function useDespesas(userId: string | undefined) {
       minhaParte: form.minhaParte ?? null,
       saldoDevedor: form.tipo === 'financiamento' ? form.valorTotal : null,
       observacoes: form.observacoes,
+      escopo: form.escopo ?? 'familiar',
+      // Pessoal é sempre de quem lançou; familiar usa quem foi escolhido no formulário
+      pagoPor: form.escopo === 'pessoal' ? (meuUid ?? null) : (form.pagoPor ?? meuUid ?? null),
       adiantamentos: [],
       pago: false,
-      userId,
+      userId: uid,
     }
 
     if (form.recorrente) {
@@ -126,49 +116,41 @@ export function useDespesas(userId: string | undefined) {
         const dataCompra = avancarMes(form.dataCompra || form.data, i)
         const listaParcelas = gerarParcelas(form.valorTotal, 1, data)
         batch.set(doc(collection(db, 'despesas')), {
-          ...baseDoc,
-          data,
-          dataCompra,
-          listaParcelas,
-          recorrente: true,
-          recorrenciaId,
-          criadoEm: serverTimestamp(),
-          atualizadoEm: serverTimestamp(),
+          ...baseDoc, data, dataCompra, listaParcelas,
+          recorrente: true, recorrenciaId,
+          criadoEm: serverTimestamp(), atualizadoEm: serverTimestamp(),
         })
       }
       await batch.commit()
     } else {
-      const listaParcelas = gerarParcelas(form.valorTotal, form.parcelas, form.data, form.valorParcelaCustom)
+      let listaParcelas = gerarParcelas(form.valorTotal, form.parcelas, form.data, form.valorParcelaCustom)
+      if (opcoes?.jaPago) {
+        listaParcelas = listaParcelas.map((p) => ({
+          ...p, pago: true,
+          pagamentos: [{ id: crypto.randomUUID(), userId: uid, valor: p.valor, data: form.data }],
+        }))
+      }
       await addDoc(collection(db, 'despesas'), {
-        ...baseDoc,
-        dataCompra: form.dataCompra || null,
-        data: form.data,
-        listaParcelas,
-        criadoEm: serverTimestamp(),
-        atualizadoEm: serverTimestamp(),
+        ...baseDoc, pago: !!opcoes?.jaPago,
+        dataCompra: form.dataCompra || null, data: form.data, listaParcelas,
+        criadoEm: serverTimestamp(), atualizadoEm: serverTimestamp(),
       })
     }
   }
 
+  // Dono dos dados conforme o escopo: pessoal = meu uid, familiar = família
   const editar = async (id: string, form: Partial<DespesaForm>) => {
     const despesa = despesas.find((d) => d.id === id)
     if (!despesa) return
-
     const novoTotal = form.valorTotal ?? despesa.valorTotal
     const novasQtd = form.parcelas ?? despesa.parcelas
     const novaData = form.data ?? despesa.data
     const novaParcelaCustom = form.valorParcelaCustom ?? undefined
-
-    const regenerar =
-      novoTotal !== despesa.valorTotal ||
-      novasQtd !== despesa.parcelas ||
-      novaData !== despesa.data ||
-      (novaParcelaCustom !== undefined && novaParcelaCustom !== despesa.valorParcela)
-
+    const regenerar = novoTotal !== despesa.valorTotal || novasQtd !== despesa.parcelas ||
+      novaData !== despesa.data || (novaParcelaCustom !== undefined && novaParcelaCustom !== despesa.valorParcela)
     const novaValorParcela = novaParcelaCustom
       ? parseFloat(novaParcelaCustom.toFixed(2))
       : parseFloat((novoTotal / novasQtd).toFixed(2))
-
     const listaParcelas = regenerar
       ? gerarParcelas(novoTotal, novasQtd, novaData, novaParcelaCustom).map((nova) => {
           const existente = despesa.listaParcelas.find((e) => e.numero === nova.numero)
@@ -176,72 +158,83 @@ export function useDespesas(userId: string | undefined) {
           return { ...nova, pagamentos: existente?.pagamentos ?? [] }
         })
       : despesa.listaParcelas
-
     await updateDoc(doc(db, 'despesas', id), {
       ...stripUndefined(form as Record<string, any>),
+      ...(form.escopo && familiaId ? { userId: donoPorEscopo(form.escopo, familiaId, meuUid) } : {}),
+      ...(form.escopo === 'pessoal' && meuUid ? { pagoPor: meuUid } : {}),
       valorParcela: novaValorParcela,
       ...(form.tipo === 'financiamento' ? { saldoDevedor: novoTotal } : {}),
-      listaParcelas,
-      atualizadoEm: serverTimestamp(),
+      listaParcelas, atualizadoEm: serverTimestamp(),
     })
   }
 
-  const remover = async (id: string) => {
-    await deleteDoc(doc(db, 'despesas', id))
+  const remover = async (id: string) => { await deleteDoc(doc(db, 'despesas', id)) }
+
+  /** Meses seguintes da mesma recorrência que ainda não tiveram nenhum pagamento */
+  const proximasDaRecorrencia = (despesa: Despesa) => {
+    if (!despesa.recorrenciaId) return []
+    return despesas.filter((d) =>
+      d.recorrenciaId === despesa.recorrenciaId && d.id !== despesa.id && d.data > despesa.data && !d.pago &&
+      d.listaParcelas.every((p) => !p.pago && (p.pagamentos?.length ?? 0) === 0))
   }
 
-  // Remove valores undefined de um objeto antes de salvar no Firestore
-  const stripUndefined = (obj: Record<string, any>): Record<string, any> =>
-    Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined))
-
-  // Registra pagamento em uma parcela específica
-  const pagarParcela = async (despesaId: string, numeroParcela: number, pagamento: Omit<Pagamento, 'id' | 'userId'>) => {
+  /**
+   * Registra um pagamento na parcela.
+   * - Padrão: soma os pagamentos; a parcela só fica paga quando atinge o valor dela.
+   * - ajustarValor: o valor da conta foi o que foi pago (ex.: luz prevista em 120, veio 80):
+   *   a parcela passa a valer o total pago e fica paga.
+   * - atualizarProximas: na recorrência, usa esse novo valor nos meses seguintes ainda não pagos.
+   */
+  const pagarParcela = async (
+    despesaId: string,
+    numeroParcela: number,
+    pagamento: Omit<Pagamento, 'id' | 'userId'>,
+    opcoes?: { ajustarValor?: boolean; atualizarProximas?: boolean },
+  ) => {
     const despesa = despesas.find((d) => d.id === despesaId)
     if (!despesa) return
+    const uid = despesa.userId
+    const novoPagamento = stripUndefined({ ...pagamento, id: crypto.randomUUID(), userId: uid }) as Pagamento
+    const { listaParcelas, novoValor, ajuste } = calcularPagamento(despesa, numeroParcela, novoPagamento, opcoes?.ajustarValor)
 
-    const novoPagamento = stripUndefined({ ...pagamento, id: crypto.randomUUID(), userId: userId! })
-
-    const listaParcelas = despesa.listaParcelas.map((p) => {
-      if (p.numero !== numeroParcela) return p
-      const pagamentos = [...p.pagamentos, novoPagamento as Pagamento]
-      const totalPago = pagamentos.reduce((s, pg) => s + pg.valor, 0)
-      return { ...p, pagamentos, pago: totalPago >= p.valor }
-    })
-
-    const todasParcelasPagas = listaParcelas.every((p) => p.pago)
+    if (opcoes?.atualizarProximas && novoValor !== null) {
+      const v: number = novoValor
+      const batch = writeBatch(db)
+      batch.update(doc(db, 'despesas', despesaId), {
+        listaParcelas, ...ajuste, pago: listaParcelas.every((p) => p.pago), atualizadoEm: serverTimestamp(),
+      })
+      proximasDaRecorrencia(despesa).forEach((d) => {
+        batch.update(doc(db, 'despesas', d.id), {
+          listaParcelas: d.listaParcelas.map((p) => ({ ...p, valor: v })),
+          valorTotal: parseFloat((v * d.listaParcelas.length).toFixed(2)),
+          valorParcela: v,
+          atualizadoEm: serverTimestamp(),
+        })
+      })
+      await batch.commit()
+      return
+    }
 
     await updateDoc(doc(db, 'despesas', despesaId), {
-      listaParcelas,
-      pago: todasParcelasPagas,
-      atualizadoEm: serverTimestamp(),
+      listaParcelas, ...ajuste, pago: listaParcelas.every((p) => p.pago), atualizadoEm: serverTimestamp(),
     })
   }
 
-  const adicionarAdiantamento = async (
-    id: string,
-    adiantamento: Omit<Pagamento, 'id' | 'userId'>,
-    parcelasQuitadas?: number
-  ) => {
+  const adicionarAdiantamento = async (id: string, adiantamento: Omit<Pagamento, 'id' | 'userId'>, parcelasQuitadas?: number) => {
     const despesa = despesas.find((d) => d.id === id)
     if (!despesa) return
-    const novoAdiantamento = stripUndefined({ ...adiantamento, id: crypto.randomUUID(), userId: userId! }) as Pagamento
+    const novoAdiantamento = stripUndefined({ ...adiantamento, id: crypto.randomUUID(), userId: despesa.userId }) as Pagamento
     const updates: Record<string, any> = {
       adiantamentos: [...(despesa.adiantamentos || []), novoAdiantamento],
       atualizadoEm: serverTimestamp(),
     }
     if (despesa.tipo === 'financiamento') {
       updates.saldoDevedor = Math.max(0, (despesa.saldoDevedor ?? despesa.valorTotal) - adiantamento.valor)
-
       if (parcelasQuitadas && parcelasQuitadas > 0) {
-        // Quita as últimas N parcelas não pagas (amortização reduz o prazo pelo final)
         const impagas = [...(despesa.listaParcelas ?? [])]
-          .filter((p) => !p.pago)
-          .sort((a, b) => b.dataVencimento.localeCompare(a.dataVencimento))
-          .slice(0, parcelasQuitadas)
+          .filter((p) => !p.pago).sort((a, b) => b.dataVencimento.localeCompare(a.dataVencimento)).slice(0, parcelasQuitadas)
         const numerosQuitados = new Set(impagas.map((p) => p.numero))
-        const novaLista = (despesa.listaParcelas ?? []).map((p) =>
-          numerosQuitados.has(p.numero) ? { ...p, pago: true } : p
-        )
+        const novaLista = (despesa.listaParcelas ?? []).map((p) => numerosQuitados.has(p.numero) ? { ...p, pago: true } : p)
         updates.listaParcelas = novaLista
         updates.pago = novaLista.every((p) => p.pago)
       }
@@ -252,22 +245,15 @@ export function useDespesas(userId: string | undefined) {
   const removerPagamento = async (despesaId: string, numeroParcela: number, pagamentoId: string) => {
     const despesa = despesas.find((d) => d.id === despesaId)
     if (!despesa) return
-
     const listaParcelas = despesa.listaParcelas.map((p) => {
       if (p.numero !== numeroParcela) return p
       const pagamentos = p.pagamentos.filter((pg) => pg.id !== pagamentoId)
-      const totalPago = pagamentos.reduce((s, pg) => s + pg.valor, 0)
-      return { ...p, pagamentos, pago: totalPago >= p.valor }
+      return { ...p, pagamentos, pago: pagamentos.reduce((s, pg) => s + pg.valor, 0) >= p.valor }
     })
-
-    const todasParcelasPagas = listaParcelas.every((p) => p.pago)
-
     await updateDoc(doc(db, 'despesas', despesaId), {
-      listaParcelas,
-      pago: todasParcelasPagas,
-      atualizadoEm: serverTimestamp(),
+      listaParcelas, pago: listaParcelas.every((p) => p.pago), atualizadoEm: serverTimestamp(),
     })
   }
 
-  return { despesas, loading, criar, editar, remover, pagarParcela, removerPagamento, adicionarAdiantamento }
+  return { despesas, loading, proximasDaRecorrencia, criar, editar, remover, pagarParcela, removerPagamento, adicionarAdiantamento }
 }

@@ -19,6 +19,7 @@ export interface Conta {
   id: string
   nome: string
   tipo: TipoConta
+  escopo?: Escopo
   userId: string
   criadoEm: string
 }
@@ -26,6 +27,7 @@ export interface Conta {
 export interface ContaForm {
   nome: string
   tipo: TipoConta
+  escopo?: Escopo
 }
 
 export interface CartaoCredito {
@@ -66,6 +68,13 @@ export interface Parcela {
 }
 
 export type TipoGasto = 'fixo' | 'variavel'
+export type Escopo = 'familiar' | 'pessoal'
+
+/** Membros da família, para escolher quem pagou/recebeu e calcular a divisão */
+export interface InfoFamilia {
+  ownerUid: string
+  membros: { uid: string; nome: string }[]
+}
 
 export interface Despesa {
   id: string
@@ -84,6 +93,11 @@ export interface Despesa {
   dataCompra?: string
   data: string
   observacoes?: string
+  escopo?: Escopo
+  /** uid de quem pagou (despesas familiares; usado na divisão) */
+  pagoPor?: string
+  /** Só em relatórios: despesa projetada a partir de um gasto previsto (id do previsto) */
+  origemPrevisto?: string
   pago: boolean
   listaParcelas: Parcela[]
   adiantamentos: Pagamento[]
@@ -109,6 +123,8 @@ export interface DespesaForm {
   dataCompra: string
   data: string
   observacoes: string
+  escopo?: Escopo
+  pagoPor?: string
   recorrente?: boolean
   recorrenciaMeses?: number
 }
@@ -139,6 +155,7 @@ export interface Caixinha {
   dataObjetivo?: string
   valorAtual: number
   historico: MovimentoCaixinha[]
+  escopo?: Escopo
   userId: string
   criadoEm: string
   atualizadoEm: string
@@ -151,21 +168,9 @@ export interface CaixinhaForm {
   metaMensal?: number
   dataObjetivo?: string
   valorInicial?: number
+  escopo?: Escopo
 }
 
-export type StatusAmizade = 'pendente' | 'aceita' | 'recusada'
-
-export interface Amizade {
-  id: string
-  solicitanteId: string
-  solicitanteNome: string
-  solicitanteEmail: string
-  receptorId: string
-  receptorNome?: string
-  receptorEmail: string
-  status: StatusAmizade
-  criadoEm: string
-}
 
 export type CategoriaReceita = 'salario' | 'freelance' | 'investimento' | 'outros'
 
@@ -176,7 +181,50 @@ export interface Receita {
   data: string
   categoria: CategoriaReceita
   recorrente: boolean
+  escopo?: Escopo
+  /** uid de quem recebeu (receitas familiares; usado na divisão) */
+  recebidoPor?: string
   userId: string
   criadoEm: string
   atualizadoEm: string
+}
+
+// ─── Gastos previstos ────────────────────────────────────────────────────────
+// Gastos que sabemos que vão acontecer de tempos em tempos (troca de óleo,
+// revisão, IPVA, dentista...). O app calcula quanto reservar por mês e avisa
+// quando está chegando a hora de fazer.
+
+export interface MovimentoPrevisto {
+  id: string
+  tipo: 'reserva' | 'uso' | 'ajuste'
+  valor: number
+  data: string
+  observacao?: string
+}
+
+export interface GastoPrevisto {
+  id: string
+  nome: string
+  categoria: Categoria
+  valorEstimado: number
+  intervaloMeses: number
+  proximaData: string
+  avisarDiasAntes: number
+  valorReservado: number
+  historico: MovimentoPrevisto[]
+  observacoes?: string
+  userId: string
+  criadoEm: string
+  atualizadoEm: string
+}
+
+export interface GastoPrevistoForm {
+  nome: string
+  categoria: Categoria
+  valorEstimado: number
+  intervaloMeses: number
+  proximaData: string
+  avisarDiasAntes: number
+  valorJaReservado?: number
+  observacoes?: string
 }

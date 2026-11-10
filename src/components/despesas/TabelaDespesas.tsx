@@ -1,7 +1,13 @@
 import { useState, useMemo } from 'react'
-import { CheckCircle2, Clock, ChevronUp, ChevronDown, ChevronsUpDown, X } from 'lucide-react'
-import type { Despesa, CartaoCredito, Conta } from '../../types'
+import { CheckCircle2, Clock, ChevronUp, ChevronDown, ChevronsUpDown, X, SlidersHorizontal } from 'lucide-react'
+import type { Despesa, CartaoCredito, Conta, InfoFamilia } from '../../types'
+import EtiquetaEscopo from '../familia/EtiquetaEscopo'
+import SelectEscopo from '../familia/SelectEscopo'
+import type { VisaoEscopo } from '../../lib/escopo'
 import CategoryIcon from '../ui/CategoryIcon'
+import Modal from '../ui/Modal'
+import ListaMobile, { ResumoMobile, useEhMobile, rotuloDia, agruparPorDia, BREAKPOINT_MOBILE } from '../ui/ListaMobile'
+import type { GrupoLista, ItemLista } from '../ui/ListaMobile'
 
 export type TabTipo = 'tudo' | 'recorrentes' | 'parcelados' | 'compartilhados'
 type ColOrdem = 'descricao' | 'conta' | 'metodo' | 'tipo' | 'vencimento' | 'status' | 'valor'
@@ -14,6 +20,10 @@ interface Props {
   ano: number
   mes: number
   tab: TabTipo
+  familia?: InfoFamilia
+  /** Filtro de escopo (Família/Pessoal), mostrado quando informado */
+  escopo?: VisaoEscopo
+  onEscopo?: (v: VisaoEscopo) => void
   onPagarParcela: (despesa: Despesa, numeroParcela: number) => void
 }
 
@@ -39,6 +49,13 @@ interface Linha {
 }
 
 const ITENS_POR_PAGINA = 10
+/** No celular: quantos cards mostrar antes do "Ver mais" */
+const LOTE_MOBILE = 20
+
+const ORDEM_LABEL: Record<ColOrdem, string> = {
+  vencimento: 'Vencimento', status: 'Status', valor: 'Valor', descricao: 'Nome',
+  conta: 'Conta', metodo: 'Método', tipo: 'Tipo',
+}
 
 const METODO_LABEL: Record<string, string> = {
   credito: 'Crédito', debito: 'Débito', pix: 'Pix', boleto: 'Boleto', dinheiro: 'Dinheiro',
@@ -49,14 +66,19 @@ function IconeOrdem({ col, ordemCol, ordemDir }: { col: ColOrdem; ordemCol: ColO
   return ordemDir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />
 }
 
-export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, tab, onPagarParcela }: Props) {
+export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, tab, familia, escopo = 'tudo', onEscopo, onPagarParcela }: Props) {
+  const ehMobile = useEhMobile()
   const [pagina, setPagina] = useState(0)
-  const [ordemCol, setOrdemCol] = useState<ColOrdem>('status')
+  const [limite, setLimite] = useState(LOTE_MOBILE)
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false)
+  // No celular a lista abre agrupada por dia de vencimento
+  const [ordemCol, setOrdemCol] = useState<ColOrdem>(() =>
+    typeof window !== 'undefined' && window.matchMedia(`(max-width: ${BREAKPOINT_MOBILE}px)`).matches ? 'vencimento' : 'status')
   const [ordemDir, setOrdemDir] = useState<DirOrdem>('asc')
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_VAZIOS)
 
   // Reset página quando mês ou tab mudam
-  useMemo(() => { setPagina(0) }, [mes, ano, tab])
+  useMemo(() => { setPagina(0); setLimite(LOTE_MOBILE) }, [mes, ano, tab])
 
   const toggleOrdem = (col: ColOrdem) => {
     if (ordemCol === col) setOrdemDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -67,8 +89,10 @@ export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, ta
   const setFiltro = <K extends keyof Filtros>(k: K, v: Filtros[K]) => {
     setFiltros(f => ({ ...f, [k]: v }))
     setPagina(0)
+    setLimite(LOTE_MOBILE)
   }
 
+  const qtdFiltrosAtivos = Object.values(filtros).filter(v => v !== 'todos').length + (onEscopo && escopo !== 'tudo' ? 1 : 0)
   const temFiltroAtivo = Object.values(filtros).some(v => v !== 'todos')
 
   const chave = `${ano}-${String(mes).padStart(2, '0')}`
@@ -153,6 +177,196 @@ export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, ta
 
   const fmtData = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
+  // ── Celular: lista de cards ──
+  if (ehMobile) {
+    const temParte = (d: Despesa) => d.minhaParte !== undefined && d.minhaParte !== null
+    const paraItem = (l: Linha): ItemLista => {
+      const d = l.despesa
+      const parcela = d.parcelas > 1 ? `${String(l.numeroParcela).padStart(2, '0')}/${String(d.parcelas).padStart(2, '0')}` : null
+      return {
+        id: `${d.id}-${l.numeroParcela}`,
+        icone: <CategoryIcon categoria={d.categoria} size={18} color="#636e72" />,
+        titulo: d.nome,
+        etiquetas: <EtiquetaEscopo despesa={d} familia={familia} />,
+        detalhes: [
+          ordemCol !== 'vencimento' && fmtData(l.dataVencimento).slice(0, 5),
+          l.contaLabel ?? l.metodoLabel,
+          parcela,
+          temParte(d) && `total ${fmt(d.valorParcela)}`,
+        ],
+        valor: fmt(l.valorParcela),
+        valorClasse: l.pago ? 'riscado' : '',
+        status: l.pago
+          ? <span className="badge-pago"><CheckCircle2 size={11} /> PAGO</span>
+          : <span className="badge-pendente"><Clock size={11} /> PENDENTE</span>,
+        esmaecido: l.pago,
+        acaoRapida: l.pago ? undefined : { label: 'Pagar', onClick: () => onPagarParcela(d, l.numeroParcela) },
+        ficha: [
+          { label: 'Vencimento', valor: fmtData(l.dataVencimento) },
+          { label: 'Conta', valor: l.contaLabel ?? '—' },
+          { label: 'Método', valor: l.metodoLabel },
+          { label: 'Tipo', valor: d.tipoGasto === 'fixo' ? 'Fixo' : 'Variável' },
+          ...(parcela ? [{ label: 'Parcela', valor: parcela }] : []),
+          ...(temParte(d) ? [{ label: 'Valor total', valor: fmt(d.valorParcela) }, { label: 'Sua parte', valor: fmt(l.valorParcela) }] : []),
+        ],
+        acoes: l.pago ? [] : [{ label: 'Pagar parcela', tom: 'primaria', onClick: () => onPagarParcela(d, l.numeroParcela) }],
+      }
+    }
+
+    const visiveis = linhasOrdenadas.slice(0, limite)
+    let grupos: GrupoLista[]
+    if (ordemCol === 'vencimento') {
+      grupos = agruparPorDia(visiveis, l => l.dataVencimento).map(([dia, ls]) => ({
+        titulo: rotuloDia(dia),
+        resumo: fmt(ls.reduce((s, l) => s + l.valorParcela, 0)),
+        itens: ls.map(paraItem),
+      }))
+    } else {
+      grupos = [{ itens: visiveis.map(paraItem) }]
+    }
+
+    return (
+      <div className="tabela-wrapper">
+        <div className="dm-barra">
+          <button type="button" className={`dm-filtrar ${qtdFiltrosAtivos > 0 ? 'ativo' : ''}`} onClick={() => setFiltrosAbertos(true)}>
+            <SlidersHorizontal size={15} />
+            Filtrar{qtdFiltrosAtivos > 0 && <span className="dm-qtd">{qtdFiltrosAtivos}</span>}
+          </button>
+          <span className="dm-ordem">
+            {ORDEM_LABEL[ordemCol]} {ordemDir === 'asc' ? '↑' : '↓'}
+          </span>
+        </div>
+
+        {todasLinhas.length > 0 && (
+          <ResumoMobile itens={[
+            { label: 'Pago', valor: fmt(subtotalPago), cor: '#27AE60' },
+            { label: 'Pendente', valor: fmt(subtotalPendente), cor: '#E74C3C' },
+            { label: 'Total', valor: fmt(subtotal), destaque: true },
+          ]} />
+        )}
+
+        <ListaMobile
+          grupos={grupos}
+          vazio={todasLinhas.length === 0 ? 'Nenhum lançamento neste mês.' : 'Nenhum resultado para os filtros selecionados.'}
+        />
+
+        {linhasOrdenadas.length > limite && (
+          <button type="button" className="dm-mais" onClick={() => setLimite(n => n + LOTE_MOBILE)}>
+            Ver mais ({linhasOrdenadas.length - limite})
+          </button>
+        )}
+        {linhasOrdenadas.length > 0 && (
+          <span className="dm-contagem">{Math.min(limite, linhasOrdenadas.length)} de {linhasOrdenadas.length} lançamentos</span>
+        )}
+
+        {filtrosAbertos && (
+          <Modal titulo="Filtrar e ordenar" onFechar={() => setFiltrosAbertos(false)}>
+            <div className="dm-form">
+              <label className="dm-campo">
+                <span>Ordenar por</span>
+                <div className="dm-ordem-linha">
+                  <select className="filtro-select" value={ordemCol} onChange={e => { setOrdemCol(e.target.value as ColOrdem); setOrdemDir('asc'); setLimite(LOTE_MOBILE) }}>
+                    {(['vencimento', 'status', 'valor', 'descricao'] as ColOrdem[]).map(c => <option key={c} value={c}>{ORDEM_LABEL[c]}</option>)}
+                  </select>
+                  <button type="button" className="dm-dir" onClick={() => setOrdemDir(d => d === 'asc' ? 'desc' : 'asc')}
+                    aria-label={ordemDir === 'asc' ? 'Crescente' : 'Decrescente'}>
+                    {ordemDir === 'asc' ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  </button>
+                </div>
+              </label>
+              <label className="dm-campo">
+                <span>Status</span>
+                <select className="filtro-select" value={filtros.status} onChange={e => setFiltro('status', e.target.value as Filtros['status'])}>
+                  <option value="todos">Todos</option>
+                  <option value="pendente">Pendente</option>
+                  <option value="pago">Pago</option>
+                </select>
+              </label>
+              <label className="dm-campo">
+                <span>Tipo</span>
+                <select className="filtro-select" value={filtros.tipo} onChange={e => setFiltro('tipo', e.target.value as Filtros['tipo'])}>
+                  <option value="todos">Todos</option>
+                  <option value="fixo">Fixo</option>
+                  <option value="variavel">Variável</option>
+                </select>
+              </label>
+              {onEscopo && (
+                <label className="dm-campo">
+                  <span>Escopo</span>
+                  <SelectEscopo valor={escopo} onChange={onEscopo} />
+                </label>
+              )}
+              {metodosDisponiveis.length > 1 && (
+                <label className="dm-campo">
+                  <span>Método</span>
+                  <select className="filtro-select" value={filtros.metodo} onChange={e => setFiltro('metodo', e.target.value)}>
+                    <option value="todos">Todos</option>
+                    {metodosDisponiveis.map(m => <option key={m} value={m}>{METODO_LABEL[m] ?? m}</option>)}
+                  </select>
+                </label>
+              )}
+              {contasDisponiveis.length > 1 && (
+                <label className="dm-campo">
+                  <span>Conta</span>
+                  <select className="filtro-select" value={filtros.conta} onChange={e => setFiltro('conta', e.target.value)}>
+                    <option value="todos">Todas</option>
+                    {contasDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+              )}
+              <div className="dm-form-acoes">
+                {(temFiltroAtivo || (onEscopo && escopo !== 'tudo')) && (
+                  <button type="button" className="dm-btn sec" onClick={() => { setFiltros(FILTROS_VAZIOS); onEscopo?.('tudo'); setLimite(LOTE_MOBILE) }}>
+                    Limpar filtros
+                  </button>
+                )}
+                <button type="button" className="dm-btn" onClick={() => setFiltrosAbertos(false)}>
+                  Ver {linhasOrdenadas.length} {linhasOrdenadas.length === 1 ? 'lançamento' : 'lançamentos'}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        <style>{`
+          .tabela-wrapper { display: flex; flex-direction: column; gap: 0.85rem; }
+          .dm-barra { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+          .dm-filtrar {
+            display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 0.9rem;
+            background: #fff; border: 1px solid #E6E9EE; border-radius: 12px; color: #2D3436;
+            font-family: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+          }
+          .dm-filtrar.ativo { border-color: #C8A45A; color: #A8853F; }
+          .dm-qtd { background: #C8A45A; color: #fff; border-radius: 10px; min-width: 18px; height: 18px; padding: 0 5px; font-size: 0.7rem; display: inline-flex; align-items: center; justify-content: center; }
+          .dm-ordem { font-size: 0.78rem; color: #95A5A6; font-weight: 600; }
+          .dm-mais {
+            min-height: 46px; border-radius: 12px; border: 1px solid #E6E9EE; background: #fff;
+            color: #A8853F; font-family: inherit; font-weight: 700; font-size: 0.88rem; cursor: pointer;
+          }
+          .dm-contagem { text-align: center; font-size: 0.75rem; color: #95A5A6; }
+          .dm-form { display: flex; flex-direction: column; gap: 0.9rem; }
+          .dm-campo { display: flex; flex-direction: column; gap: 0.35rem; }
+          .dm-campo > span { font-size: 0.78rem; font-weight: 600; color: #636E72; }
+          .dm-form .filtro-select {
+            color: #2D3436; padding: 0 2.25rem 0 0.85rem; font-weight: 600; outline: none; font-family: inherit;
+            appearance: none; -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2395A5A6' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 12px center;
+          }
+          .dm-form .filtro-select:focus { border-color: #C8A45A; }
+          .dm-form .filtro-select { width: 100%; min-height: 46px; font-size: 0.92rem; border-radius: 12px; background-color: #F8F9FA; border: 1px solid #E6E9EE; }
+          .dm-ordem-linha { display: flex; gap: 0.5rem; }
+          .dm-dir { flex-shrink: 0; width: 46px; border-radius: 12px; border: 1px solid #E6E9EE; background: #F8F9FA; color: #2D3436; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+          .dm-form-acoes { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; }
+          .dm-btn { min-height: 48px; border-radius: 12px; border: none; background: #C8A45A; color: #fff; font-family: inherit; font-weight: 700; font-size: 0.92rem; cursor: pointer; }
+          .dm-btn.sec { background: rgba(231,76,60,0.08); color: #C0392B; }
+          .badge-pago { display: inline-flex; align-items: center; gap: 3px; background: #E8F5E9; color: #27AE60; border-radius: 20px; padding: 2px 7px; font-size: 0.64rem; font-weight: 700; white-space: nowrap; }
+          .badge-pendente { display: inline-flex; align-items: center; gap: 3px; background: #FFF5F5; color: #E74C3C; border-radius: 20px; padding: 2px 7px; font-size: 0.64rem; font-weight: 700; white-space: nowrap; }
+        `}</style>
+      </div>
+    )
+  }
+
   const Th = ({ col, label, className }: { col: ColOrdem; label: string; className?: string }) => (
     <th className={`sortable ${className ?? ''}`} onClick={() => toggleOrdem(col)}>
       <span className="th-inner">
@@ -177,6 +391,8 @@ export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, ta
           <option value="fixo">Fixo</option>
           <option value="variavel">Variável</option>
         </select>
+
+        {onEscopo && <SelectEscopo valor={escopo} onChange={onEscopo} />}
 
         {metodosDisponiveis.length > 1 && (
           <select className="filtro-select" value={filtros.metodo} onChange={e => setFiltro('metodo', e.target.value)}>
@@ -237,6 +453,7 @@ export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, ta
                           </div>
                           <div className="desc-info">
                             <span className="desc-nome">{d.nome}</span>
+                            <EtiquetaEscopo despesa={d} familia={familia} />
                             {d.minhaParte !== undefined && d.minhaParte !== null && <span className="desc-parte">sua parte: {fmt(l.valorParcela)}</span>}
                           </div>
                         </div>
