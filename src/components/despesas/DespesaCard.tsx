@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Trash2, CheckCircle2, Circle, Pencil, AlertCircle, SplitSquareHorizontal } from 'lucide-react'
+import { Trash2, CheckCircle2, Pencil, SplitSquareHorizontal, ChevronRight } from 'lucide-react'
 import type { Despesa, InfoFamilia } from '../../types'
 import EtiquetaEscopo from '../familia/EtiquetaEscopo'
 import CategoryIcon from '../ui/CategoryIcon'
@@ -12,27 +11,19 @@ interface Props {
   despesa: Despesa
   cartaoLabel?: string
   familia?: InfoFamilia
+  /** Abre o diálogo com detalhes, parcelas e ações */
+  onAbrir: () => void
   onEditar: () => void
   onRemover: () => void
-  onPagarParcela: (numeroParcela: number) => void
-  onRemoverPagamento: (numeroParcela: number, pagamentoId: string) => void
-  onAdiantar: () => void
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtData = (data: string) =>
   new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 
-const hoje = new Date()
-hoje.setHours(0, 0, 0, 0)
-
 export default function DespesaCard({
-  despesa, cartaoLabel, familia, onEditar, onRemover, onPagarParcela, onRemoverPagamento, onAdiantar,
+  despesa, cartaoLabel, familia, onAbrir, onEditar, onRemover,
 }: Props) {
-  const [expandido, setExpandido] = useState(false)
-  const PARCELAS_POR_PAGINA = 5
-  const [paginaParcelas, setPaginaParcelas] = useState(0)
-
   const parcelasPagas = despesa.listaParcelas?.filter((p) => p.pago).length ?? 0
   const totalParcelas = despesa.parcelas
   const progresso = totalParcelas > 0 ? (parcelasPagas / totalParcelas) * 100 : 0
@@ -40,7 +31,6 @@ export default function DespesaCard({
   const proximaParcela = despesa.listaParcelas?.filter((p) => !p.pago)
     .sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento))[0]
   const dataVencimento = proximaParcela?.dataVencimento ?? despesa.data
-  const totalAdiantado = despesa.adiantamentos?.reduce((s, a) => s + a.valor, 0) ?? 0
   const valorTotal = despesa.valorTotal ?? (despesa as any).valor ?? 0
   const valorParcela = despesa.valorParcela ?? valorTotal
   const isFinanciamento = despesa.tipo === 'financiamento'
@@ -54,16 +44,10 @@ export default function DespesaCard({
   const temMinhaParte = minhaParte !== undefined && minhaParte !== null
   const minhaPartePorParcela = temMinhaParte && totalParcelas > 1 ? minhaParte! / totalParcelas : minhaParte
 
-  const parcelasOrdenadas = despesa.listaParcelas
-    ? [
-        ...despesa.listaParcelas.filter(p => !p.pago).sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento)),
-        ...despesa.listaParcelas.filter(p => p.pago).sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento)),
-      ]
-    : []
-
   return (
     <div className={`despesa-card ${despesa.pago ? 'paga' : ''}`}>
-      <div className="card-main" onClick={() => setExpandido((v) => !v)}>
+      <div className="card-main" role="button" tabIndex={0} aria-label={`Abrir ${despesa.nome}`}
+        onClick={onAbrir} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir() } }}>
         <div className="card-icon">
           <CategoryIcon categoria={despesa.categoria} size={22} color="#636e72" />
         </div>
@@ -128,128 +112,12 @@ export default function DespesaCard({
             <Trash2 size={13} />
           </button>
         </div>
+        <ChevronRight size={16} className="card-seta" aria-hidden="true" />
       </div>
 
       {!despesa.pago && totalParcelas > 1 && (
         <div className="progresso-bar">
           <div className="progresso-fill" style={{ width: `${progresso}%` }} />
-        </div>
-      )}
-
-      {expandido && (
-        <div className="card-detalhes">
-          {despesa.observacoes && (
-            <p className="detalhe-obs">{despesa.observacoes}</p>
-          )}
-
-          {isFinanciamento && (
-            <div className="saldo-devedor-box">
-              <div className="sd-row">
-                <span className="sd-label">Saldo devedor atual</span>
-                <span className="sd-valor">{fmt(saldoAtual)}</span>
-              </div>
-              {saldoAtual !== valorTotal && (
-                <div className="sd-row">
-                  <span className="sd-label">Saldo inicial</span>
-                  <span className="sd-valor-orig">{fmt(valorTotal)}</span>
-                </div>
-              )}
-              {totalAdiantado > 0 && (
-                <div className="sd-row">
-                  <span className="sd-label">Total amortizado</span>
-                  <span className="sd-valor-amortz">{fmt(totalAdiantado)}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {!isFinanciamento && totalAdiantado > 0 && (
-            <div className="detalhe-row">
-              <span>Adiantado:</span>
-              <span className="valor-gold">{fmt(totalAdiantado)}</span>
-            </div>
-          )}
-
-          {temMinhaParte && (
-            <div className="minha-parte-box">
-              <div className="mp-row">
-                <span className="mp-label">Total da despesa</span>
-                <span className="mp-valor-total">{fmt(valorTotal)}</span>
-              </div>
-              <div className="mp-row">
-                <span className="mp-label">Minha parte{totalParcelas > 1 ? ' total' : ''}</span>
-                <span className="mp-valor">{fmt(minhaParte)}</span>
-              </div>
-              {totalParcelas > 1 && (
-                <div className="mp-row">
-                  <span className="mp-label">Minha parte/mês</span>
-                  <span className="mp-valor">{fmt(minhaPartePorParcela!)}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {!despesa.pago && (
-            <button className="acao-btn acao-adiantar" onClick={(e) => { e.stopPropagation(); onAdiantar() }}>
-              {isFinanciamento ? 'Amortizar' : 'Adiantar'}
-            </button>
-          )}
-
-          {parcelasOrdenadas.length > 0 && (() => {
-            const totalPaginas = Math.ceil(parcelasOrdenadas.length / PARCELAS_POR_PAGINA)
-            const inicio = paginaParcelas * PARCELAS_POR_PAGINA
-            const parcelasPagina = parcelasOrdenadas.slice(inicio, inicio + PARCELAS_POR_PAGINA)
-            return (
-              <div className="parcelas-lista">
-                {parcelasPagina.map((p) => {
-                  const dataVenc = new Date(p.dataVencimento + 'T12:00:00')
-                  const vencida = !p.pago && dataVenc < hoje
-                  const ultimoPg = p.pagamentos?.length ? p.pagamentos[p.pagamentos.length - 1] : null
-                  const StatusIcon = p.pago
-                    ? <CheckCircle2 size={15} className="pi-ok" />
-                    : vencida
-                      ? <AlertCircle size={15} className="pi-vencida" />
-                      : <Circle size={15} className="pi-pendente" />
-                  return (
-                    <div key={p.numero} className={`parcela-inline ${p.pago ? 'parcela-paga' : vencida ? 'parcela-vencida' : ''}`}>
-                      <span className="pi-icon">{StatusIcon}</span>
-                      <span className="pi-valor">{fmt(p.valor)}</span>
-                      <span className="pi-dot">·</span>
-                      <span className="pi-data">{fmtData(p.dataVencimento)}</span>
-                      {p.pago && ultimoPg && (
-                        <>
-                          <span className="pi-dot">·</span>
-                          <span className="pi-pg-data">pg {fmtData(ultimoPg.data)}</span>
-                        </>
-                      )}
-                      <div className="pi-acao">
-                        {p.pago && ultimoPg ? (
-                          <button className="btn-remover-pg" title="Remover pagamento"
-                            onClick={(e) => { e.stopPropagation(); onRemoverPagamento(p.numero, ultimoPg.id) }}>
-                            <Trash2 size={11} />
-                          </button>
-                        ) : !p.pago ? (
-                          <button className="btn-pagar-parcela"
-                            onClick={(e) => { e.stopPropagation(); onPagarParcela(p.numero) }}>
-                            Pagar
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  )
-                })}
-                {totalPaginas > 1 && (
-                  <div className="parcelas-paginacao">
-                    <button className="pp-btn" disabled={paginaParcelas === 0}
-                      onClick={(e) => { e.stopPropagation(); setPaginaParcelas(p => p - 1) }}>‹</button>
-                    <span className="pp-info">{paginaParcelas + 1}/{totalPaginas} · {inicio + 1}–{Math.min(inicio + PARCELAS_POR_PAGINA, parcelasOrdenadas.length)} de {parcelasOrdenadas.length}</span>
-                    <button className="pp-btn" disabled={paginaParcelas + 1 >= totalPaginas}
-                      onClick={(e) => { e.stopPropagation(); setPaginaParcelas(p => p + 1) }}>›</button>
-                  </div>
-                )}
-              </div>
-            )
-          })()}
         </div>
       )}
 
@@ -293,6 +161,7 @@ export default function DespesaCard({
       .card-btn-edit:hover { background: #F1F2F6; color: #636E72; }
       .card-btn-del:hover { background: #FDECEA; color: #E74C3C; }
 
+      .card-seta { color: #CED6E0; flex-shrink: 0; }
       .progresso-bar { height: 3px; background: #F1F2F6; }
       .progresso-fill { height: 100%; background: #C8A45A; transition: width 0.3s ease; }
 

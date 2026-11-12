@@ -1,23 +1,20 @@
-import { useState } from 'react'
-import { Pencil, Trash2, ArrowUp, ArrowDown, CheckCircle2, TrendingUp, Sparkles } from 'lucide-react'
-import type { Caixinha, MovimentoCaixinha } from '../../types'
+import { CheckCircle2, ChevronRight } from 'lucide-react'
+import type { Caixinha, InfoFamilia } from '../../types'
 import CategoryIcon from '../ui/CategoryIcon'
+import { criadorDaCaixinha, nomePessoa } from '../../lib/caixinhas'
 
 interface Props {
   caixinha: Caixinha
-  onEditar: () => void
-  onRemover: () => void
-  onDepositar: () => void
-  onRetirar: () => void
-  onRendimento: () => void
-  onRemoverMovimento?: (m: MovimentoCaixinha) => void
+  /** Abre o diálogo com detalhes, movimentos e ações */
+  onAbrir: () => void
+  /** Família com mais de uma pessoa: mostra quem criou */
+  familia?: InfoFamilia
+  meuUid?: string
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDepositar, onRetirar, onRendimento, onRemoverMovimento }: Props) {
-  const [expandido, setExpandido] = useState(false)
-
+export default function CaixinhaCard({ caixinha, onAbrir, familia, meuUid }: Props) {
   const progresso = caixinha.valorMeta
     ? Math.min((caixinha.valorAtual / caixinha.valorMeta) * 100, 100)
     : null
@@ -29,19 +26,19 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
     const alvo = new Date(caixinha.dataObjetivo + 'T12:00:00')
     const hoje = new Date()
     const meses = Math.max(1, (alvo.getFullYear() - hoje.getFullYear()) * 12 + (alvo.getMonth() - hoje.getMonth()))
-    return { valor: falta / meses, meses, data: alvo.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) }
+    return { valor: falta / meses, meses }
   })()
 
-  const ultimosMovimentos = [...(caixinha.historico ?? [])]
-    .sort((a, b) => b.data.localeCompare(a.data))
-    .slice(0, 5)
+  const mostrarAutor = (familia?.membros.length ?? 0) > 1
+  const criador = mostrarAutor ? nomePessoa(criadorDaCaixinha(caixinha, familia), familia, meuUid) : null
 
   return (
     <div className="caixinha-card">
-      <div className="card-main" onClick={() => setExpandido((v) => !v)}>
+      <button type="button" className="card-main" onClick={onAbrir} aria-label={`Abrir ${caixinha.nome}`}>
         <div className="card-icon"><CategoryIcon categoria={caixinha.categoria} size={22} color="#636e72" /></div>
         <div className="card-info">
           <div className="card-nome">{caixinha.nome}</div>
+          {criador && <div className="card-autor">Criada por {criador}</div>}
           {caixinha.valorMeta && (
             <div className="card-meta">
               Meta: {fmt(caixinha.valorMeta)}
@@ -63,56 +60,13 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
             <span className="badge-meta"><CheckCircle2 size={10} /> meta</span>
           )}
         </div>
-      </div>
+        <ChevronRight size={18} className="card-seta" aria-hidden="true" />
+      </button>
 
       {/* Barra de progresso */}
       {progresso !== null && (
         <div className="progresso-bar">
           <div className="progresso-fill" style={{ width: `${progresso}%` }} />
-        </div>
-      )}
-
-      {expandido && (
-        <div className="card-detalhes">
-          {/* Ações rápidas */}
-          <div className="acoes-rapidas">
-            <button className="btn-depositar" onClick={onDepositar}><ArrowUp size={14} /> Depositar</button>
-            <button className="btn-retirar" onClick={onRetirar} disabled={caixinha.valorAtual <= 0}><ArrowDown size={14} /> Retirar</button>
-            <button className="btn-rendimento" onClick={onRendimento}><TrendingUp size={14} /> Rendimento</button>
-          </div>
-
-          {/* Histórico */}
-          {ultimosMovimentos.length > 0 && (
-            <div className="historico">
-              <span className="historico-titulo">Últimos movimentos</span>
-              {ultimosMovimentos.map((m) => (
-                <div key={m.id} className="movimento-row">
-                  <span className={`mov-tipo ${m.tipo}`}>
-                    {m.tipo === 'entrada' ? <ArrowUp size={13} /> : m.tipo === 'rendimento' ? <Sparkles size={13} /> : <ArrowDown size={13} />}
-                  </span>
-                  <span className="mov-data">
-                    {new Date(m.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-                  </span>
-                  {m.observacao && <span className="mov-obs">{m.observacao}</span>}
-                  <span className={`mov-valor ${m.tipo}`}>{m.tipo === 'saida' ? '-' : '+'}{fmt(m.valor)}</span>
-                  {onRemoverMovimento && (
-                    <button type="button" className="mov-remover" aria-label={`Excluir movimento de ${fmt(m.valor)}`} title="Excluir movimento"
-                      onClick={() => {
-                        const tipo = m.tipo === 'entrada' ? 'depósito' : m.tipo === 'saida' ? 'retirada' : 'rendimento'
-                        if (confirm(`Excluir o ${tipo} de ${fmt(m.valor)}? O saldo da caixinha será corrigido.`)) onRemoverMovimento(m)
-                      }}>
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="card-acoes">
-            <button className="acao-btn" onClick={onEditar}><Pencil size={14} /> Editar</button>
-            <button className="acao-btn acao-remover" onClick={onRemover}><Trash2 size={14} /></button>
-          </div>
         </div>
       )}
 
@@ -269,6 +223,10 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
       }
 
       .mov-data { color: #95A5A6; font-size: 0.75rem; }
+      .mov-autor { font-size: 0.72rem; font-weight: 700; color: #636E72; background: #F1F2F6; border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+      .card-autor { font-size: 0.72rem; color: #95A5A6; margin-top: 1px; }
+      button.card-main { width: 100%; background: none; border: none; font-family: inherit; text-align: left; color: inherit; cursor: pointer; }
+      .card-seta { color: #CED6E0; flex-shrink: 0; }
       .mov-obs { 
         color: #636E72; 
         flex: 1; 
@@ -277,7 +235,7 @@ export default function CaixinhaCard({ caixinha, onEditar, onRemover, onDeposita
       }
 
       .mov-tipo.rendimento { color: #C8A45A; }
-      .mov-valor { font-weight: 600; font-variant-numeric: tabular-nums; }
+      .mov-valor { font-weight: 600; font-variant-numeric: tabular-nums; margin-left: auto; }
       .mov-valor.entrada { color: #2ECC71; }
       .mov-valor.saida { color: #E74C3C; }
       .mov-valor.rendimento { color: #C8A45A; }

@@ -16,6 +16,37 @@ function calcularComprometido(despesa: Despesa): number {
   return despesa.valorTotal ?? 0
 }
 
+/**
+ * Recorrências (assinaturas, mensalidades) são gravadas como um lançamento por mês,
+ * mas só ocupam o limite quando são cobradas. De cada recorrência entram só os
+ * meses em aberto até o mês atual (o do mês + algum atrasado); se não houver
+ * nenhum, entra o próximo. Compras parceladas continuam ocupando o total restante.
+ */
+function despesasQueOcupamLimite(despesas: Despesa[]): Despesa[] {
+  const hoje = new Date()
+  const fimMesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-31`
+  const avulsas: Despesa[] = []
+  const recorrencias = new Map<string, Despesa[]>()
+
+  for (const d of despesas) {
+    if (!d.recorrente) { avulsas.push(d); continue }
+    // Recorrências antigas sem id: agrupa pelo nome e valor
+    const chave = d.recorrenciaId ?? `${d.nome}|${d.valorTotal}`
+    const grupo = recorrencias.get(chave)
+    if (grupo) grupo.push(d)
+    else recorrencias.set(chave, [d])
+  }
+
+  const recorrentes: Despesa[] = []
+  for (const grupo of recorrencias.values()) {
+    const ordenadas = [...grupo].sort((a, b) => a.data.localeCompare(b.data))
+    const ateAgora = ordenadas.filter(d => d.data <= fimMesAtual)
+    recorrentes.push(...(ateAgora.length > 0 ? ateAgora : ordenadas.slice(0, 1)))
+  }
+
+  return [...avulsas, ...recorrentes]
+}
+
 export default function RelatorioCartoes({ despesas, cartoes }: Props) {
   if (cartoes.length === 0) {
     return (
@@ -30,7 +61,7 @@ export default function RelatorioCartoes({ despesas, cartoes }: Props) {
     const despesasCartao = despesas.filter(
       (d) => d.cartaoId === cartao.id && d.metodoPagamento === 'credito' && !d.pago
     )
-    const comprometidoTotal = despesasCartao.reduce((s, d) => s + calcularComprometido(d), 0)
+    const comprometidoTotal = despesasQueOcupamLimite(despesasCartao).reduce((s, d) => s + calcularComprometido(d), 0)
 
     const limite = cartao.limite ?? 0
     const disponivel = limite > 0 ? Math.max(0, limite - comprometidoTotal) : null

@@ -210,7 +210,7 @@ export default function App() {
             {tab === 'despesas' && <DespesasPage pedidoNovaDespesa={pedidoNovaDespesa} familiaId={familiaId} meuUid={user?.uid} temFamilia={temFamilia} familia={infoFamilia} />}
             {tab === 'receitas' && <ReceitasPage familiaId={familiaId} meuUid={user?.uid} temFamilia={temFamilia} familia={infoFamilia} />}
             {tab === 'previstos' && <GastosPrevistosPage previstosApi={previstosApi} familiaId={familiaId} meuUid={user?.uid} />}
-            {tab === 'caixinhas' && <CaixinhasPage familiaId={familiaId} meuUid={user?.uid} temFamilia={temFamilia} />}
+            {tab === 'caixinhas' && <CaixinhasPage familiaId={familiaId} meuUid={user?.uid} temFamilia={temFamilia} familia={infoFamilia} />}
             {tab === 'conta' && <ContaPage familiaApi={familiaApi} familiaId={familiaId} meuUid={user?.uid ?? ''} />}
           </div>
         </main>

@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   Timestamp,
   writeBatch,
+  deleteField,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { assinarDonos, donosVisiveis, donoPorEscopo } from '../lib/escopo'
@@ -102,6 +103,7 @@ export function useDespesas(familiaId: string | undefined, meuUid?: string) {
       escopo: form.escopo ?? 'familiar',
       // Pessoal é sempre de quem lançou; familiar usa quem foi escolhido no formulário
       pagoPor: form.escopo === 'pessoal' ? (meuUid ?? null) : (form.pagoPor ?? meuUid ?? null),
+      criadoPor: meuUid ?? null,
       adiantamentos: [],
       pago: false,
       userId: uid,
@@ -139,9 +141,35 @@ export function useDespesas(familiaId: string | undefined, meuUid?: string) {
   }
 
   // Dono dos dados conforme o escopo: pessoal = meu uid, familiar = família
-  const editar = async (id: string, form: Partial<DespesaForm>) => {
+  const editar = async (id: string, form: Partial<DespesaForm>, opcoes?: { aplicarProximas?: boolean }) => {
     const despesa = despesas.find((d) => d.id === id)
     if (!despesa) return
+    // Recorrência: aplica a mesma alteração nos meses seguintes ainda não pagos
+    const proximas = opcoes?.aplicarProximas && despesa.recorrente ? proximasDaRecorrencia(despesa) : []
+    if (proximas.length > 0) {
+      const batch = writeBatch(db)
+      const valor = form.valorTotal ?? despesa.valorTotal
+      const campos = stripUndefined({
+        nome: form.nome, categoria: form.categoria, metodoPagamento: form.metodoPagamento,
+        tipoGasto: form.tipoGasto, observacoes: form.observacoes, escopo: form.escopo,
+      } as Record<string, any>)
+      for (const d of proximas) {
+        batch.update(doc(db, 'despesas', d.id), {
+          ...campos,
+          // Campos que podem ter sido removidos no formulário
+          ...('cartaoId' in form ? { cartaoId: form.cartaoId ?? deleteField() } : {}),
+          ...('contaId' in form ? { contaId: form.contaId ?? deleteField() } : {}),
+          ...('minhaParte' in form ? { minhaParte: form.minhaParte ?? deleteField() } : {}),
+          ...(form.escopo && familiaId ? { userId: donoPorEscopo(form.escopo, familiaId, meuUid) } : {}),
+          ...(form.escopo === 'pessoal' && meuUid ? { pagoPor: meuUid } : form.pagoPor ? { pagoPor: form.pagoPor } : {}),
+          valorTotal: valor,
+          valorParcela: valor,
+          listaParcelas: gerarParcelas(valor, 1, d.data),
+          atualizadoEm: serverTimestamp(),
+        })
+      }
+      await batch.commit()
+    }
     const novoTotal = form.valorTotal ?? despesa.valorTotal
     const novasQtd = form.parcelas ?? despesa.parcelas
     const novaData = form.data ?? despesa.data
@@ -160,6 +188,7 @@ export function useDespesas(familiaId: string | undefined, meuUid?: string) {
       : despesa.listaParcelas
     await updateDoc(doc(db, 'despesas', id), {
       ...stripUndefined(form as Record<string, any>),
+      ...(despesa.recorrente && 'minhaParte' in form ? { minhaParte: form.minhaParte ?? deleteField() } : {}),
       ...(form.escopo && familiaId ? { userId: donoPorEscopo(form.escopo, familiaId, meuUid) } : {}),
       ...(form.escopo === 'pessoal' && meuUid ? { pagoPor: meuUid } : {}),
       valorParcela: novaValorParcela,

@@ -10,7 +10,7 @@ import ReservarForm from '../components/previstos/ReservarForm'
 import ConcluirForm, { type DadosConclusao } from '../components/previstos/ConcluirForm'
 import EstilosPrevistos from '../components/previstos/estilos'
 import Modal from '../components/ui/Modal'
-import { useEhMobile } from '../components/ui/ListaMobile'
+import { useEhMobile } from '../lib/mobile'
 import { fmtBRL, precisaAtencao, resumir } from '../lib/previstos'
 import type { GastoPrevisto, GastoPrevistoForm as FormType } from '../types'
 

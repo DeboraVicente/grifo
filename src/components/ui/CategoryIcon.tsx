@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   Home, User, Heart, Car, Sparkles, Utensils, BookOpen, Gamepad2, Package,
-  ShieldAlert, Plane, Wrench, Smartphone,
+  ShieldAlert, Plane, Wrench, Smartphone, Gift,
 } from 'lucide-react'
 import type { Categoria, CaixinhaCategoria } from '../../types'
 
@@ -16,6 +16,7 @@ const ICONS: Partial<Record<AnyCategoria, LucideIcon>> = {
   alimentacao: Utensils,
   educacao: BookOpen,
   lazer: Gamepad2,
+  presente: Gift,
   outros: Package,
   emergencia: ShieldAlert,
   viagem: Plane,

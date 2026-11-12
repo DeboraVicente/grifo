@@ -12,6 +12,7 @@ const CATEGORIAS: { value: Categoria; label: string }[] = [
   { value: 'alimentacao', label: 'Alimentação' },
   { value: 'educacao', label: 'Educação' },
   { value: 'lazer', label: 'Lazer' },
+  { value: 'presente', label: 'Presente' },
   { value: 'outros', label: 'Outros' },
 ]
 
@@ -30,7 +31,9 @@ interface Props {
   emFamilia?: boolean
   familia?: InfoFamilia
   meuUid?: string
-  onSalvar: (form: DespesaFormType) => Promise<void>
+  /** Edição de recorrência: quantos meses seguintes ainda estão em aberto */
+  proximasEmAberto?: number
+  onSalvar: (form: DespesaFormType, opcoes?: { aplicarProximas?: boolean }) => Promise<void>
   onCancelar: () => void
 }
 
@@ -44,7 +47,7 @@ const FORM_VAZIO: DespesaFormType = {
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export default function DespesaForm({ inicial, cartoes, contas, emFamilia, familia, meuUid, onSalvar, onCancelar }: Props) {
+export default function DespesaForm({ inicial, cartoes, contas, emFamilia, familia, meuUid, proximasEmAberto = 0, onSalvar, onCancelar }: Props) {
   const [form, setForm] = useState<DespesaFormType>(
     inicial ? {
       nome: inicial.nome,
@@ -67,6 +70,7 @@ export default function DespesaForm({ inicial, cartoes, contas, emFamilia, famil
     } : { ...FORM_VAZIO, pagoPor: meuUid, escopo: emFamilia ? 'pessoal' : 'familiar' }
   )
   const [loading, setLoading] = useState(false)
+  const [aplicarProximas, setAplicarProximas] = useState(true)
   const [recorrenteAtivo, setRecorrenteAtivo] = useState(inicial?.recorrente ?? false)
   const [recorrenciaMeses, setRecorrenciaMeses] = useState(12)
   const [minhaParteAtivo, setMinhaParteAtivo] = useState(inicial?.minhaParte !== undefined && inicial?.minhaParte !== null)
@@ -150,7 +154,7 @@ export default function DespesaForm({ inicial, cartoes, contas, emFamilia, famil
         minhaParte: minhaParteAtivo ? form.minhaParte : undefined,
         recorrente: recorrenteAtivo || undefined,
         recorrenciaMeses: recorrenteAtivo ? recorrenciaMeses : undefined,
-      })
+      }, { aplicarProximas: proximasEmAberto > 0 && aplicarProximas })
     } finally {
       setLoading(false)
     }
@@ -443,6 +447,16 @@ export default function DespesaForm({ inicial, cartoes, contas, emFamilia, famil
         </div>
       </div>
 
+      {inicial?.recorrente && proximasEmAberto > 0 && (
+        <label className="aplicar-proximas">
+          <input type="checkbox" checked={aplicarProximas} onChange={(e) => setAplicarProximas(e.target.checked)} />
+          <span>
+            <strong>Aplicar também aos próximos {proximasEmAberto} {proximasEmAberto === 1 ? 'mês' : 'meses'}</strong>
+            <small>Valor, nome, categoria, pagamento e escopo mudam nos meses seguintes ainda não pagos. Meses já pagos não mudam.</small>
+          </span>
+        </label>
+      )}
+
       <div className="form-actions">
         <button type="button" className="btn-ghost" onClick={onCancelar}>Cancelar</button>
         <button type="submit" className="btn-primary" disabled={loading}>
@@ -452,6 +466,14 @@ export default function DespesaForm({ inicial, cartoes, contas, emFamilia, famil
 
       <style>{`
         .despesa-form { display: flex; flex-direction: column; gap: 1.5rem; background: #FFFFFF; }
+        .aplicar-proximas {
+          display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer;
+          background: rgba(142,68,173,0.05); border: 1px solid rgba(142,68,173,0.2); border-radius: 12px; padding: 0.8rem 0.9rem;
+        }
+        .aplicar-proximas input { margin-top: 3px; accent-color: #8E44AD; width: 16px; height: 16px; flex-shrink: 0; }
+        .aplicar-proximas span { display: flex; flex-direction: column; gap: 0.15rem; }
+        .aplicar-proximas strong { font-size: 0.85rem; color: #2D3436; }
+        .aplicar-proximas small { font-size: 0.75rem; color: #7F8C8D; line-height: 1.4; }
 
         /* Cada grupo ocupa a largura do próprio conteúdo e quebra de linha quando não cabe;
            os grupos de uma mesma linha crescem para preencher o espaço */

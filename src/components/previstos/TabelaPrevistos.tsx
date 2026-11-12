@@ -1,7 +1,8 @@
 import { Check, Pencil, PiggyBank, Trash2 } from 'lucide-react'
 import type { GastoPrevisto } from '../../types'
 import CategoryIcon from '../ui/CategoryIcon'
-import ListaMobile, { ResumoMobile, useEhMobile } from '../ui/ListaMobile'
+import ListaMobile, { ResumoMobile } from '../ui/ListaMobile'
+import { useEhMobile } from '../../lib/mobile'
 import { descreverIntervalo, descreverPrazo, fmtBRL, resumir } from '../../lib/previstos'
 
 interface Props {

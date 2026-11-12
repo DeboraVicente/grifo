@@ -2,7 +2,8 @@ import { Pencil, Trash2, Repeat } from 'lucide-react'
 import type { Receita } from '../../types'
 import { CATEGORIA_RECEITA_LABEL, fmtBRL, fmtDiaMes, resumoReceitas, type LinhaReceita } from '../../lib/receitas'
 import IconeReceita from './IconeReceita'
-import ListaMobile, { ResumoMobile, useEhMobile, rotuloDia, agruparPorDia } from '../ui/ListaMobile'
+import ListaMobile, { ResumoMobile } from '../ui/ListaMobile'
+import { useEhMobile, rotuloDia, agruparPorDia } from '../../lib/mobile'
 
 interface Props {
   linhas: LinhaReceita[]

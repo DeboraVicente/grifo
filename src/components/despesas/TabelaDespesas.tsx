@@ -6,7 +6,8 @@ import SelectEscopo from '../familia/SelectEscopo'
 import type { VisaoEscopo } from '../../lib/escopo'
 import CategoryIcon from '../ui/CategoryIcon'
 import Modal from '../ui/Modal'
-import ListaMobile, { ResumoMobile, useEhMobile, rotuloDia, agruparPorDia, BREAKPOINT_MOBILE } from '../ui/ListaMobile'
+import ListaMobile, { ResumoMobile } from '../ui/ListaMobile'
+import { useEhMobile, rotuloDia, agruparPorDia, BREAKPOINT_MOBILE } from '../../lib/mobile'
 import type { GrupoLista, ItemLista } from '../ui/ListaMobile'
 
 export type TabTipo = 'tudo' | 'recorrentes' | 'parcelados' | 'compartilhados'
@@ -25,6 +26,8 @@ interface Props {
   escopo?: VisaoEscopo
   onEscopo?: (v: VisaoEscopo) => void
   onPagarParcela: (despesa: Despesa, numeroParcela: number) => void
+  /** Abre o diálogo de detalhes da despesa */
+  onAbrir?: (despesa: Despesa, numeroParcela: number) => void
 }
 
 interface Filtros {
@@ -66,7 +69,7 @@ function IconeOrdem({ col, ordemCol, ordemDir }: { col: ColOrdem; ordemCol: ColO
   return ordemDir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />
 }
 
-export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, tab, familia, escopo = 'tudo', onEscopo, onPagarParcela }: Props) {
+export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, tab, familia, escopo = 'tudo', onEscopo, onPagarParcela, onAbrir }: Props) {
   const ehMobile = useEhMobile()
   const [pagina, setPagina] = useState(0)
   const [limite, setLimite] = useState(LOTE_MOBILE)
@@ -201,15 +204,7 @@ export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, ta
           : <span className="badge-pendente"><Clock size={11} /> PENDENTE</span>,
         esmaecido: l.pago,
         acaoRapida: l.pago ? undefined : { label: 'Pagar', onClick: () => onPagarParcela(d, l.numeroParcela) },
-        ficha: [
-          { label: 'Vencimento', valor: fmtData(l.dataVencimento) },
-          { label: 'Conta', valor: l.contaLabel ?? '—' },
-          { label: 'Método', valor: l.metodoLabel },
-          { label: 'Tipo', valor: d.tipoGasto === 'fixo' ? 'Fixo' : 'Variável' },
-          ...(parcela ? [{ label: 'Parcela', valor: parcela }] : []),
-          ...(temParte(d) ? [{ label: 'Valor total', valor: fmt(d.valorParcela) }, { label: 'Sua parte', valor: fmt(l.valorParcela) }] : []),
-        ],
-        acoes: l.pago ? [] : [{ label: 'Pagar parcela', tom: 'primaria', onClick: () => onPagarParcela(d, l.numeroParcela) }],
+        onAbrir: onAbrir ? () => onAbrir(d, l.numeroParcela) : undefined,
       }
     }
 
@@ -445,7 +440,8 @@ export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, ta
                 {linhasPagina.map((l) => {
                   const d = l.despesa
                   return (
-                    <tr key={`${d.id}-${l.numeroParcela}`} className={l.pago ? 'linha-paga' : ''}>
+                    <tr key={`${d.id}-${l.numeroParcela}`} className={`${l.pago ? 'linha-paga' : ''} ${onAbrir ? 'clicavel' : ''}`}
+                      onClick={() => onAbrir?.(d, l.numeroParcela)}>
                       <td className="col-desc">
                         <div className="desc-cell">
                           <div className="desc-icon">
@@ -487,7 +483,7 @@ export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, ta
                           </span>
                           {d.minhaParte !== undefined && d.minhaParte !== null && <span className="valor-parte">Sua parte: {fmt(l.valorParcela)}</span>}
                           {!l.pago && (
-                            <button className="btn-pagar-linha" onClick={() => onPagarParcela(d, l.numeroParcela)}>
+                            <button className="btn-pagar-linha" onClick={(e) => { e.stopPropagation(); onPagarParcela(d, l.numeroParcela) }}>
                               Pagar
                             </button>
                           )}
@@ -579,6 +575,7 @@ export default function TabelaDespesas({ despesas, cartoes, contas, ano, mes, ta
         .tabela tbody tr:last-child { border-bottom: none; }
         .tabela tbody tr:hover { background: #FAFBFC; }
         .tabela tbody tr.linha-paga { opacity: 0.6; }
+        .tabela tbody tr.clicavel { cursor: pointer; }
 
         .tabela td { padding: 0.9rem 1rem; vertical-align: middle; }
         .tabela td.col-valor { text-align: right; }

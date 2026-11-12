@@ -44,6 +44,7 @@ export function useCaixinhas(familiaId: string | undefined, meuUid?: string) {
     const historico = valorInicial > 0 ? [{
       id: crypto.randomUUID(), tipo: 'entrada', valor: valorInicial,
       data: new Date().toISOString().split('T')[0], observacao: 'Valor inicial',
+      ...(meuUid ? { userId: meuUid } : {}),
     }] : []
     await addDoc(collection(db, 'caixinhas'), {
       nome: form.nome, categoria: form.categoria,
@@ -51,6 +52,7 @@ export function useCaixinhas(familiaId: string | undefined, meuUid?: string) {
       dataObjetivo: form.dataObjetivo ?? null,
       escopo: form.escopo ?? 'familiar',
       valorAtual: valorInicial, historico, userId: uid,
+      ...(meuUid ? { criadoPor: meuUid } : {}),
       criadoEm: serverTimestamp(), atualizadoEm: serverTimestamp(),
     })
   }
@@ -71,7 +73,7 @@ export function useCaixinhas(familiaId: string | undefined, meuUid?: string) {
     const caixinha = caixinhas.find((c) => c.id === id)
     if (!caixinha) return
     const novoSaldo = tipo === 'saida' ? Math.max(0, caixinha.valorAtual - dados.valor) : caixinha.valorAtual + dados.valor
-    const movimento: MovimentoCaixinha = { id: crypto.randomUUID(), tipo, valor: dados.valor, data: dados.data, observacao: dados.observacao || '' }
+    const movimento: MovimentoCaixinha = { id: crypto.randomUUID(), tipo, valor: dados.valor, data: dados.data, observacao: dados.observacao || '', ...(meuUid ? { userId: meuUid } : {}) }
     await updateDoc(doc(db, 'caixinhas', id), {
       valorAtual: novoSaldo, historico: [...(caixinha.historico ?? []), movimento], atualizadoEm: serverTimestamp(),
     })

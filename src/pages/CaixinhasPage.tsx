@@ -6,8 +6,9 @@ import CaixinhaCard from '../components/caixinhas/CaixinhaCard'
 import CaixinhaForm from '../components/caixinhas/CaixinhaForm'
 import MetasInvestimento from '../components/caixinhas/MetasInvestimento'
 import MovimentoForm from '../components/caixinhas/MovimentoForm'
+import DetalhesCaixinha from '../components/caixinhas/DetalhesCaixinha'
 import Modal from '../components/ui/Modal'
-import type { Caixinha, CaixinhaForm as CaixinhaFormType } from '../types'
+import type { Caixinha, CaixinhaForm as CaixinhaFormType, InfoFamilia } from '../types'
 
 type ModalTipo = 'criar' | 'editar' | 'depositar' | 'retirar' | 'rendimento' | null
 type Visualizacao = 'cards' | 'metas'
@@ -15,13 +16,16 @@ type Visualizacao = 'cards' | 'metas'
 const MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
-export default function CaixinhasPage({ familiaId, meuUid, temFamilia = false }: { familiaId?: string; meuUid?: string; temFamilia?: boolean }) {
+export default function CaixinhasPage({ familiaId, meuUid, temFamilia = false, familia }: { familiaId?: string; meuUid?: string; temFamilia?: boolean; familia?: InfoFamilia }) {
   const { user } = useAuthContext()
   const { caixinhas, loading, criar, editar, remover, adicionarMovimento, removerMovimento } = useCaixinhas(familiaId ?? user?.uid, meuUid ?? user?.uid)
 
   const hoje = new Date()
   const [modal, setModal] = useState<ModalTipo>(null)
   const [selecionada, setSelecionada] = useState<Caixinha | null>(null)
+  // Diálogo de detalhes: guarda só o id para sempre mostrar os dados atualizados
+  const [detalheId, setDetalheId] = useState<string | null>(null)
+  const detalhe = caixinhas.find((c) => c.id === detalheId) ?? null
   const [visualizacao, setVisualizacao] = useState<Visualizacao>('metas')
   const [ano, setAno] = useState(hoje.getFullYear())
   const [mes, setMes] = useState(hoje.getMonth() + 1)
@@ -46,7 +50,9 @@ export default function CaixinhasPage({ familiaId, meuUid, temFamilia = false }:
   const handleRemover = async (c: Caixinha) => {
     if (!confirm(`Remover "${c.nome}"? O saldo será perdido.`)) return
     await remover(c.id)
+    if (detalheId === c.id) setDetalheId(null)
   }
+  const abrirAcao = (c: Caixinha, tipo: Exclude<ModalTipo, 'criar' | null>) => { setSelecionada(c); setModal(tipo) }
   const handleMovimento = async (dados: { valor: number; data: string; observacao: string }) => {
     if (!selecionada || !modal) return
     const tipo = modal === 'depositar' ? 'entrada' : modal === 'rendimento' ? 'rendimento' : 'saida'
@@ -100,7 +106,10 @@ export default function CaixinhasPage({ familiaId, meuUid, temFamilia = false }:
           caixinhas={caixinhas}
           ano={ano}
           mes={mes}
-          onDepositar={(c) => { setSelecionada(c); setModal('depositar') }}
+          onDepositar={(c) => abrirAcao(c, 'depositar')}
+          onAbrir={(c) => setDetalheId(c.id)}
+          familia={familia}
+          meuUid={meuUid}
         />
       ) : (
         <div className="caixinhas-list">
@@ -108,15 +117,28 @@ export default function CaixinhasPage({ familiaId, meuUid, temFamilia = false }:
             <CaixinhaCard
               key={c.id}
               caixinha={c}
-              onEditar={() => { setSelecionada(c); setModal('editar') }}
-              onRemover={() => handleRemover(c)}
-              onDepositar={() => { setSelecionada(c); setModal('depositar') }}
-              onRetirar={() => { setSelecionada(c); setModal('retirar') }}
-              onRendimento={() => { setSelecionada(c); setModal('rendimento') }}
-              onRemoverMovimento={(m) => removerMovimento(c.id, m.id)}
+              onAbrir={() => setDetalheId(c.id)}
+              familia={familia}
+              meuUid={meuUid}
             />
           ))}
         </div>
+      )}
+
+      {detalhe && (
+        <Modal titulo={detalhe.nome} onFechar={() => setDetalheId(null)}>
+          <DetalhesCaixinha
+            caixinha={detalhe}
+            familia={familia}
+            meuUid={meuUid}
+            onDepositar={() => abrirAcao(detalhe, 'depositar')}
+            onRetirar={() => abrirAcao(detalhe, 'retirar')}
+            onRendimento={() => abrirAcao(detalhe, 'rendimento')}
+            onEditar={() => abrirAcao(detalhe, 'editar')}
+            onRemover={() => handleRemover(detalhe)}
+            onRemoverMovimento={(m) => removerMovimento(detalhe.id, m.id)}
+          />
+        </Modal>
       )}
 
       {modal === 'criar' && (

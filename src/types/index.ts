@@ -7,6 +7,7 @@ export type Categoria =
   | 'alimentacao'
   | 'educacao'
   | 'lazer'
+  | 'presente'
   | 'outros'
 
 export type MetodoPagamento = 'debito' | 'credito' | 'pix' | 'boleto' | 'dinheiro'
@@ -96,6 +97,8 @@ export interface Despesa {
   escopo?: Escopo
   /** uid de quem pagou (despesas familiares; usado na divisão) */
   pagoPor?: string
+  /** uid de quem lançou a despesa (despesas antigas não têm) */
+  criadoPor?: string
   /** Só em relatórios: despesa projetada a partir de um gasto previsto (id do previsto) */
   origemPrevisto?: string
   pago: boolean
@@ -144,6 +147,8 @@ export interface MovimentoCaixinha {
   valor: number
   data: string
   observacao?: string
+  /** uid de quem fez o movimento */
+  userId?: string
 }
 
 export interface Caixinha {
@@ -156,6 +161,8 @@ export interface Caixinha {
   valorAtual: number
   historico: MovimentoCaixinha[]
   escopo?: Escopo
+  /** uid de quem criou (caixinhas antigas não têm) */
+  criadoPor?: string
   userId: string
   criadoEm: string
   atualizadoEm: string

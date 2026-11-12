@@ -1,13 +1,20 @@
 import { ArrowUp } from 'lucide-react'
-import type { Caixinha } from '../../types'
+import type { Caixinha, InfoFamilia } from '../../types'
+import { aportesPorPessoa, criadorDaCaixinha, nomePessoa } from '../../lib/caixinhas'
 import CategoryIcon from '../ui/CategoryIcon'
-import ListaMobile, { ResumoMobile, useEhMobile } from '../ui/ListaMobile'
+import ListaMobile, { ResumoMobile } from '../ui/ListaMobile'
+import { useEhMobile } from '../../lib/mobile'
 
 interface Props {
   caixinhas: Caixinha[]
   ano: number
   mes: number
   onDepositar: (caixinha: Caixinha) => void
+  /** Abre o diálogo de detalhes da caixinha */
+  onAbrir?: (caixinha: Caixinha) => void
+  /** Família com mais de uma pessoa: mostra quem criou e quem aportou */
+  familia?: InfoFamilia
+  meuUid?: string
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -25,7 +32,15 @@ function investidoNomes(caixinha: Caixinha, ano: number, mes: number): number {
 
 const hoje = new Date()
 
-export default function MetasInvestimento({ caixinhas, ano, mes, onDepositar }: Props) {
+export default function MetasInvestimento({ caixinhas, ano, mes, onDepositar, onAbrir, familia, meuUid }: Props) {
+  const mostrarAutor = (familia?.membros.length ?? 0) > 1
+  const criador = (c: Caixinha) => mostrarAutor ? nomePessoa(criadorDaCaixinha(c, familia), familia, meuUid) : null
+  /** "Você R$ 100 · Ana R$ 50" — só os aportes com autor registrado */
+  const quemAportou = (c: Caixinha) => mostrarAutor
+    ? aportesPorPessoa(c, ano, mes)
+        .map((a) => ({ nome: nomePessoa(a.uid, familia, meuUid), valor: a.valor }))
+        .filter((a): a is { nome: string; valor: number } => !!a.nome)
+    : []
   const ehMesAtual = ano === hoje.getFullYear() && mes === hoje.getMonth() + 1
   const caixinhasComMeta = caixinhas.filter((c) => c.metaMensal)
   const ehMobile = useEhMobile()
@@ -53,7 +68,10 @@ export default function MetasInvestimento({ caixinhas, ano, mes, onDepositar }: 
                 id: c.id,
                 icone: <CategoryIcon categoria={c.categoria} size={18} color="#636e72" />,
                 titulo: c.nome,
-                detalhes: [`${fmt(investido)} de ${fmt(c.metaMensal!)} no mês`],
+                detalhes: [
+                  `${fmt(investido)} de ${fmt(c.metaMensal!)} no mês`,
+                  quemAportou(c).map((a) => `${a.nome} ${fmt(a.valor)}`).join(', ') || null,
+                ],
                 status: <span className={`badge-status ${aportou ? 'aportou' : 'nao-aportou'}`}>{aportou ? 'Aportou' : 'Não aportou'}</span>,
                 extra: progresso !== null ? (
                   <span className="metas-m-prog">
@@ -64,6 +82,7 @@ export default function MetasInvestimento({ caixinhas, ano, mes, onDepositar }: 
                 acaoRapida: ehMesAtual
                   ? { label: 'Aportar', icone: <ArrowUp size={14} />, onClick: () => onDepositar(c) }
                   : undefined,
+                onAbrir: onAbrir ? () => onAbrir(c) : undefined,
               }
             }),
           }]}
@@ -112,13 +131,16 @@ export default function MetasInvestimento({ caixinhas, ano, mes, onDepositar }: 
                   : null
 
                 return (
-                  <tr key={c.id}>
+                  <tr key={c.id} className={onAbrir ? 'clicavel' : ''} onClick={() => onAbrir?.(c)}>
                     <td className="col-motivo">
                       <div className="motivo-cell">
                         <div className="motivo-icon">
                           <CategoryIcon categoria={c.categoria} size={18} color="#636e72" />
                         </div>
-                        <span className="motivo-nome">{c.nome}</span>
+                        <span className="motivo-info">
+                          <span className="motivo-nome">{c.nome}</span>
+                          {criador(c) && <span className="motivo-autor">Criada por {criador(c)}</span>}
+                        </span>
                       </div>
                     </td>
                     <td className="col-num">
@@ -132,6 +154,9 @@ export default function MetasInvestimento({ caixinhas, ano, mes, onDepositar }: 
                         ? <span className="investido-valor">{fmt(investido)}</span>
                         : <span className="sem-valor">R$ 0,00</span>
                       }
+                      {quemAportou(c).map((a) => (
+                        <span key={a.nome} className="aporte-autor">{a.nome} {fmt(a.valor)}</span>
+                      ))}
                     </td>
                     <td className="col-progresso">
                       {progresso !== null ? (
@@ -154,7 +179,7 @@ export default function MetasInvestimento({ caixinhas, ano, mes, onDepositar }: 
                     </td>
                     <td className="col-acao">
                       {ehMesAtual && (
-                        <button className="btn-aportar" onClick={() => onDepositar(c)} title="Depositar">
+                        <button className="btn-aportar" onClick={(e) => { e.stopPropagation(); onDepositar(c) }} title="Depositar">
                           <ArrowUp size={14} />
                         </button>
                       )}
@@ -204,6 +229,7 @@ export default function MetasInvestimento({ caixinhas, ano, mes, onDepositar }: 
         }
         .metas-tabela tbody tr:last-child { border-bottom: none; }
         .metas-tabela tbody tr:hover { background: #FAFBFC; }
+        .metas-tabela tbody tr.clicavel { cursor: pointer; }
 
         .metas-tabela td {
           padding: 1rem;
@@ -219,6 +245,9 @@ export default function MetasInvestimento({ caixinhas, ano, mes, onDepositar }: 
           display: flex; align-items: center; justify-content: center; flex-shrink: 0;
         }
         .motivo-nome { font-weight: 600; color: #2D3436; }
+        .motivo-info { display: flex; flex-direction: column; min-width: 0; }
+        .motivo-autor { font-size: 0.72rem; color: #95A5A6; }
+        .aporte-autor { display: block; font-size: 0.7rem; color: #95A5A6; white-space: nowrap; }
 
         .aporte { color: #636E72; }
         .investido-valor { font-weight: 600; color: #2ECC71; }

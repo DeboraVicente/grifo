@@ -10,6 +10,7 @@ const CATEGORIAS: { value: Categoria; label: string }[] = [
   { value: 'educacao', label: 'Educação' },
   { value: 'beleza', label: 'Beleza' },
   { value: 'lazer', label: 'Lazer' },
+  { value: 'presente', label: 'Presente' },
   { value: 'alimentacao', label: 'Alimentação' },
   { value: 'outros', label: 'Outros' },
 ]

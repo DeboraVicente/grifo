@@ -18,7 +18,7 @@ interface Props {
 
 // Mapeamento de categorias para a regra 50/20/30
 const ESSENCIAL: Categoria[] = ['casa', 'saude', 'locomocao', 'alimentacao', 'educacao']
-const QUALIDADE: Categoria[] = ['lazer', 'beleza', 'pessoal', 'outros']
+const QUALIDADE: Categoria[] = ['lazer', 'beleza', 'pessoal', 'presente', 'outros']
 
 function parcelasMes(despesa: Despesa, mes: number, ano: number) {
   return despesa.listaParcelas.filter((p) => {
@@ -92,8 +92,9 @@ export default function FluxoCaixaMensal({ despesas, receitas, caixinhas, userId
               </button>
             )}
           </span>
-          <span className="fc-valor">{fmt(detalhe ? detalhe.totalPagina : dados.totalDespesas)}</span>
-          {detalhe && <span className="fc-sub">comprometido: {fmt(dados.totalDespesas)}</span>}
+          {/* Em destaque o que compromete a renda (é o que entra no saldo); o total lançado fica como apoio */}
+          <span className="fc-valor">{fmt(dados.totalDespesas)}</span>
+          {detalhe && <span className="fc-sub">total lançado: {fmt(detalhe.totalPagina)}</span>}
         </div>
         <div className="fluxo-card caixinha">
           <span className="fc-label">Investido em Caixinhas</span>

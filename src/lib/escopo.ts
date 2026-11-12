@@ -66,11 +66,17 @@ export function filtrarPorVisao<T extends { escopo?: Escopo }>(itens: T[], visao
   return itens.filter((i) => (i.escopo ?? 'familiar') === visao)
 }
 
-/** Texto curto que diz de quem é a despesa: "Pessoal" ou "pago por <nome>". */
+/** uid de quem lançou a despesa. Nas antigas (sem criadoPor) usa quem pagou, ou a dona da família. */
+export function criadorDaDespesa(d: Despesa, familia: InfoFamilia): string {
+  const membro = (uid?: string) => (uid && familia.membros.some((m) => m.uid === uid) ? uid : undefined)
+  return membro(d.criadoPor) ?? membro(d.pagoPor) ?? familia.ownerUid
+}
+
+/** Texto curto que diz de quem é a despesa: "Pessoal" ou "criado por <nome>". */
 export function etiquetaDespesa(d: Despesa, familia?: InfoFamilia): { tipo: 'pessoal' | 'familiar'; texto: string } | null {
   if (d.escopo === 'pessoal') return { tipo: 'pessoal', texto: 'Pessoal' }
   if (!familia || familia.membros.length < 2) return null
-  const uid = d.pagoPor && familia.membros.some((m) => m.uid === d.pagoPor) ? d.pagoPor : familia.ownerUid
+  const uid = criadorDaDespesa(d, familia)
   const nome = familia.membros.find((m) => m.uid === uid)?.nome || 'Membro'
-  return { tipo: 'familiar', texto: `Família · pago por ${nome}` }
+  return { tipo: 'familiar', texto: `Família · criado por ${nome}` }
 }

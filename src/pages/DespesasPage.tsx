@@ -11,6 +11,7 @@ import { filtrarPorVisao, type VisaoEscopo } from '../lib/escopo'
 import TabelaDespesas, { type TabTipo } from '../components/despesas/TabelaDespesas'
 import PagamentoForm from '../components/despesas/PagamentoForm'
 import Modal from '../components/ui/Modal'
+import DetalhesDespesa from '../components/despesas/DetalhesDespesa'
 import type { Despesa, DespesaForm as DespesaFormType, InfoFamilia } from '../types'
 
 type ModalTipo = 'criar' | 'editar' | 'pagar' | 'adiantar' | null
@@ -56,6 +57,9 @@ export default function DespesasPage({ pedidoNovaDespesa = 0, familiaId, meuUid,
   const hoje = new Date()
   const [modal, setModal] = useState<ModalTipo>(null)
   const [selecionada, setSelecionada] = useState<Despesa | null>(null)
+  // Diálogo de detalhes: guarda o id para sempre mostrar os dados atualizados
+  const [detalhe, setDetalhe] = useState<{ id: string; parcela?: number } | null>(null)
+  const despesaDetalhe = detalhe ? todasDespesas.find((d) => d.id === detalhe.id) ?? null : null
 
   // Abre o formulário quando vem do botão "+" ou do atalho do ícone do app
   useEffect(() => {
@@ -97,14 +101,15 @@ export default function DespesasPage({ pedidoNovaDespesa = 0, familiaId, meuUid,
   const fecharModal = () => { setModal(null); setSelecionada(null) }
 
   const handleCriar = async (form: DespesaFormType) => { await criar(form); fecharModal() }
-  const handleEditar = async (form: DespesaFormType) => {
+  const handleEditar = async (form: DespesaFormType, opcoes?: { aplicarProximas?: boolean }) => {
     if (!selecionada) return
-    await editar(selecionada.id, form)
+    await editar(selecionada.id, form, opcoes)
     fecharModal()
   }
   const handleRemover = async (d: Despesa) => {
     if (!confirm(`Remover "${d.nome}"?`)) return
     await remover(d.id)
+    if (detalhe?.id === d.id) setDetalhe(null)
   }
   const handlePagarParcela = async (dados: { valor: number; data: string; observacao: string; ajustarValor?: boolean; atualizarProximas?: boolean }) => {
     if (!selecionada) return
@@ -287,6 +292,7 @@ export default function DespesasPage({ pedidoNovaDespesa = 0, familiaId, meuUid,
           mes={mes}
           tab={tab}
           onPagarParcela={abrirPagarParcela}
+          onAbrir={(d, parcela) => setDetalhe({ id: d.id, parcela })}
         />
       ) : despesasExibidas.length === 0 ? (
         <div className="estado-vazio">
@@ -309,11 +315,9 @@ export default function DespesasPage({ pedidoNovaDespesa = 0, familiaId, meuUid,
                   despesa={d}
                   cartaoLabel={cartaoLabel}
                   familia={familiaParaEtiqueta}
+                  onAbrir={() => setDetalhe({ id: d.id })}
                   onEditar={() => { setSelecionada(d); setModal('editar') }}
                   onRemover={() => handleRemover(d)}
-                  onPagarParcela={(num) => abrirPagarParcela(d, num)}
-                  onRemoverPagamento={(num, pgId) => removerPagamento(d.id, num, pgId)}
-                  onAdiantar={() => { setSelecionada(d); setModal('adiantar') }}
                 />
               )
             })}
@@ -333,6 +337,22 @@ export default function DespesasPage({ pedidoNovaDespesa = 0, familiaId, meuUid,
       )}
 
       {/* ── Modais ── */}
+      {despesaDetalhe && (
+        <Modal titulo={despesaDetalhe.nome} onFechar={() => setDetalhe(null)}>
+          <DetalhesDespesa
+            despesa={despesaDetalhe}
+            contaLabel={cartoes.find(c => c.id === despesaDetalhe.cartaoId)?.nome ?? contas.find(c => c.id === despesaDetalhe.contaId)?.nome}
+            familia={familiaParaEtiqueta}
+            parcelaFoco={detalhe?.parcela}
+            onPagar={(num) => abrirPagarParcela(despesaDetalhe, num)}
+            onRemoverPagamento={(num, pgId) => removerPagamento(despesaDetalhe.id, num, pgId)}
+            onEditar={() => { setSelecionada(despesaDetalhe); setModal('editar') }}
+            onRemover={() => handleRemover(despesaDetalhe)}
+            onAdiantar={() => { setSelecionada(despesaDetalhe); setModal('adiantar') }}
+          />
+        </Modal>
+      )}
+
       {modal === 'criar' && (
         <Modal titulo="Nova despesa" onFechar={fecharModal}>
           <DespesaForm cartoes={cartoes} contas={contas} emFamilia={temFamilia} familia={familia} meuUid={myUid} onSalvar={handleCriar} onCancelar={fecharModal} />
@@ -340,7 +360,9 @@ export default function DespesasPage({ pedidoNovaDespesa = 0, familiaId, meuUid,
       )}
       {modal === 'editar' && selecionada && (
         <Modal titulo="Editar despesa" onFechar={fecharModal}>
-          <DespesaForm cartoes={cartoes} contas={contas} emFamilia={temFamilia} familia={familia} meuUid={myUid} inicial={selecionada} onSalvar={handleEditar} onCancelar={fecharModal} />
+          <DespesaForm cartoes={cartoes} contas={contas} emFamilia={temFamilia} familia={familia} meuUid={myUid} inicial={selecionada}
+            proximasEmAberto={selecionada.recorrente ? proximasDaRecorrencia(selecionada).length : 0}
+            onSalvar={handleEditar} onCancelar={fecharModal} />
         </Modal>
       )}
       {modal === 'pagar' && selecionada && parcelaObj && (
