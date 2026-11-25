@@ -14,7 +14,7 @@ import ControleParcelamentos from '../components/relatorios/ControleParcelamento
 import ForecastGastos from '../components/relatorios/ForecastGastos'
 import EvolucaoFinanceira from '../components/relatorios/EvolucaoFinanceira'
 import RelatorioCartoes from '../components/relatorios/RelatorioCartoes'
-import { filtrarPorVisao } from '../lib/escopo'
+import { criadorDaDespesa, filtrarPorVisao } from '../lib/escopo'
 import DivisaoFamiliaCard from '../components/familia/DivisaoFamiliaCard'
 import { calcDivisao, aplicarCota, proporcaoNoMes } from '../lib/divisao'
 import type { Despesa, GastoPrevisto, InfoFamilia } from '../types'
@@ -112,6 +112,10 @@ export default function RelatoriosPage({ familiaId, meuUid, temFamilia = false, 
     const previstosCheio = totalMes(despesasPrevistas)
     const cotaFamiliares = totalMes(minhaCota.filter((d) => !d.origemPrevisto))
     const cotaPrevistos = totalMes(minhaCota.filter((d) => d.origemPrevisto))
+    // Familiares que eu lancei (valor cheio), para o "Total pessoal"
+    const familiaresQueLancei = emFamilia && familia && myUid
+      ? totalMes(despesasFamiliaresReais.filter((d) => criadorDaDespesa(d, familia) === myUid))
+      : 0
     const pct = emFamilia && familia && myUid ? Math.round(proporcaoNoMes(myUid, receitasFamilia, familia, mes, ano) * 100) : 100
 
     const meu: DetalheFluxo = {
@@ -120,6 +124,7 @@ export default function RelatoriosPage({ familiaId, meuUid, temFamilia = false, 
       rotuloTotal: 'Total comprometido da sua renda',
       rotuloRenda: 'da sua renda',
       totalPagina: pessoais + familiaresCheio,
+      totalPessoal: emFamilia ? pessoais + familiaresQueLancei : undefined,
       linhas: emFamilia ? [
         { label: 'Despesas pessoais', valor: pessoais },
         { label: 'Sua cota das despesas familiares', valor: cotaFamiliares, sub: `${pct}% de ${fmt(familiaresCheio)}` },
@@ -180,7 +185,7 @@ export default function RelatoriosPage({ familiaId, meuUid, temFamilia = false, 
            {!isTemporal && <span className="tag-global">Dados Gerais</span>}
         </header>
 
-        {abaAtiva === 'fluxo' && <FluxoCaixaMensal {...relatorioProps} detalhe={detalheMeu} />}
+        {abaAtiva === 'fluxo' && <FluxoCaixaMensal {...relatorioProps} detalhe={detalheMeu} aportesDe={emFamilia ? myUid : undefined} />}
         {abaAtiva === 'categorias' && <RelatorioCategoria {...relatorioProps} />}
         {abaAtiva === 'parcelamentos' && <ControleParcelamentos {...relatorioProps} />}
         {abaAtiva === 'forecast' && <ForecastGastos {...relatorioProps} previstos={previstos} />}

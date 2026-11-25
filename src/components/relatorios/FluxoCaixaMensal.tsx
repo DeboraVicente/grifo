@@ -14,6 +14,11 @@ interface Props {
   ano: number
   /** Liga o total da página de Despesas ao que compromete a renda (cota, previstos) */
   detalhe?: DetalheFluxo
+  /**
+   * Visão pessoal dentro de uma família: conta só o que ESTA pessoa guardou.
+   * Aportes de outro membro numa caixinha da família não entram no "seu" 20%.
+   */
+  aportesDe?: string
 }
 
 // Mapeamento de categorias para a regra 50/20/30
@@ -33,17 +38,25 @@ function barraRegra(real: number, meta: number) {
   return { pct, ok }
 }
 
-export default function FluxoCaixaMensal({ despesas, receitas, caixinhas, userId, mes, ano, detalhe }: Props) {
+export default function FluxoCaixaMensal({ despesas, receitas, caixinhas, userId, mes, ano, detalhe, aportesDe }: Props) {
   const [verDetalhe, setVerDetalhe] = useState(false)
   const dados = calcFluxoCaixaMensal(despesas, receitas, userId, mes, ano)
   const saldoPositivo = dados.saldo >= 0
 
   // Totais de caixinhas
   const totalCaixinhas = caixinhas.reduce((s, c) => s + c.valorAtual, 0)
+  const totalIndividual = caixinhas
+    .filter((c) => c.escopo === 'pessoal')
+    .reduce((s, c) => s + c.valorAtual, 0)
+  const totalFamilia = totalCaixinhas - totalIndividual
   const mesChave = `${ano}-${String(mes + 1).padStart(2, '0')}`
+  // Aporte é desta pessoa se foi ela que registrou; aportes antigos sem autor
+  // só contam como dela quando a caixinha é pessoal
+  const ehMeuAporte = (c: Caixinha, autor?: string) =>
+    !aportesDe || autor === aportesDe || (!autor && c.escopo === 'pessoal')
   const investidoMes = caixinhas.reduce((s, c) =>
     s + (c.historico ?? [])
-      .filter(m => m.tipo === 'entrada' && m.data.startsWith(mesChave))
+      .filter(m => m.tipo === 'entrada' && m.data.startsWith(mesChave) && ehMeuAporte(c, m.userId))
       .reduce((ms, m) => ms + m.valor, 0), 0)
 
   // Breakdown: fixo vs variável + pago vs pendente
@@ -93,13 +106,32 @@ export default function FluxoCaixaMensal({ despesas, receitas, caixinhas, userId
             )}
           </span>
           {/* Em destaque o que compromete a renda (é o que entra no saldo); o total lançado fica como apoio */}
-          <span className="fc-valor">{fmt(dados.totalDespesas)}</span>
-          {detalhe && <span className="fc-sub">total lançado: {fmt(detalhe.totalPagina)}</span>}
+          {detalhe?.totalPessoal !== undefined ? (
+            // Em família: o que eu lancei x o que compromete a minha renda (entra no saldo)
+            <div className="fc-duplo">
+              <div className="fc-duplo-linha"><span>Total pessoal</span><strong>{fmt(detalhe.totalPessoal)}</strong></div>
+              <div className="fc-duplo-linha destaque"><span>Total comprometido</span><strong>{fmt(dados.totalDespesas)}</strong></div>
+            </div>
+          ) : (
+            <>
+              <span className="fc-valor">{fmt(dados.totalDespesas)}</span>
+              {detalhe && <span className="fc-sub">total lançado: {fmt(detalhe.totalPagina)}</span>}
+            </>
+          )}
         </div>
         <div className="fluxo-card caixinha">
-          <span className="fc-label">Investido em Caixinhas</span>
+          <span className="fc-label">{aportesDe ? 'Você guardou no mês' : 'Investido em Caixinhas'}</span>
           <span className="fc-valor">{fmt(investidoMes)}</span>
-          <span className="fc-sub">total acumulado: {fmt(totalCaixinhas)}</span>
+          {aportesDe ? (
+            // Saldo atual das caixinhas, separado por escopo
+            <div className="fc-duplo">
+              <div className="fc-duplo-linha"><span>Individual</span><strong>{fmt(totalIndividual)}</strong></div>
+              <div className="fc-duplo-linha"><span>Família</span><strong>{fmt(totalFamilia)}</strong></div>
+              <div className="fc-duplo-linha destaque"><span>Total guardado</span><strong>{fmt(totalCaixinhas)}</strong></div>
+            </div>
+          ) : (
+            <span className="fc-sub">total acumulado: {fmt(totalCaixinhas)}</span>
+          )}
         </div>
         <div className={`fluxo-card saldo ${saldoPositivo ? 'positivo' : 'negativo'}`}>
           <span className="fc-label">Saldo do Mês</span>
@@ -263,6 +295,12 @@ export default function FluxoCaixaMensal({ despesas, receitas, caixinhas, userId
         .fc-label { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #95A5A6; }
         .fc-valor { font-size: 1.3rem; font-weight: 800; color: #2D3436; }
         .fc-sub { font-size: 0.7rem; color: #95A5A6; }
+        .fc-duplo { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.15rem; }
+        .fc-duplo-linha { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0 0.5rem; }
+        .fc-duplo-linha span { font-size: 0.72rem; color: #95A5A6; font-weight: 600; }
+        .fc-duplo-linha strong { font-size: 0.95rem; font-weight: 700; color: #636E72; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .fc-duplo-linha.destaque span { color: #2D3436; }
+        .fc-duplo-linha.destaque strong { font-size: 1.2rem; font-weight: 800; color: #2D3436; }
         .fc-label-acao { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
         .fc-detalhe {
           display: flex; align-items: center; justify-content: center; width: 26px; height: 26px;

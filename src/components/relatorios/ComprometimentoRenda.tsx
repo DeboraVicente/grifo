@@ -17,6 +17,8 @@ export interface DetalheFluxo {
   rotuloRenda: string
   /** Total igual ao da página de Despesas no mesmo mês (valor cheio, sem previstos) */
   totalPagina: number
+  /** Visão pessoal em família: despesas pessoais + familiares que a pessoa lançou (valor cheio) */
+  totalPessoal?: number
   /** O que de fato compromete a renda neste relatório */
   linhas: LinhaComprometimento[]
 }
